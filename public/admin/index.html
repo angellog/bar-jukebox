@@ -122,6 +122,7 @@
         <div class="admin-nav-item" data-target="config">⚙️ Settings</div>
         <div class="admin-nav-item" data-target="spotify">🔊 Spotify Setup</div>
         <div class="admin-nav-item" data-target="qr">📱 Branded QR Code</div>
+        <a id="playerPageLink" href="#" target="_blank" class="admin-nav-item" style="display:block; text-decoration:none; border: 1.5px dashed var(--qp-primary); color:var(--qp-primary-light)">▶️ Open Player</a>
       </aside>
 
       <!-- PANELS -->
@@ -129,6 +130,22 @@
         <!-- OVERVIEW -->
         <section class="admin-panel active" id="panel-overview">
           <h2 class="qp-h3 qp-mb-lg">Active Performance</h2>
+
+          <div id="setupChecklist" class="qp-card qp-mb-lg" style="padding:1rem">
+            <h4 style="font-weight:600; margin-bottom:.75rem; font-size:.95rem">🚀 Setup Checklist</h4>
+            <div style="display:flex; flex-direction:column; gap:.5rem; font-size:.88rem">
+              <div id="checkSpotify" style="display:flex; align-items:center; gap:.5rem; color:var(--qp-text-secondary)">
+                <span id="checkSpotifyIcon">⏳</span> Connect Spotify Premium account
+              </div>
+              <div id="checkPlayer" style="display:flex; align-items:center; gap:.5rem; color:var(--qp-text-secondary)">
+                <span id="checkPlayerIcon">⏳</span> Open player page on your laptop
+              </div>
+              <div id="checkGuest" style="display:flex; align-items:center; gap:.5rem; color:var(--qp-text-secondary)">
+                <span id="checkGuestIcon">⏳</span> Guest adds a song via QR code
+              </div>
+            </div>
+          </div>
+
           <div class="stats-grid">
             <div class="qp-stat">
               <div class="qp-stat-value" id="statQueue">0</div>
@@ -159,7 +176,7 @@
           <h2 class="qp-h3 qp-mb-md">Current Music Stream</h2>
           
           <div class="qp-flex qp-gap-sm qp-mb-lg">
-            <button id="skipBtn" class="qp-btn qp-btn-primary">⏭️ Skip Current</button>
+            <button id="skipBtn" class="qp-btn qp-btn-primary">▶️ Play Next / Skip</button>
             <button id="clearQueueBtn" class="qp-btn qp-btn-secondary">🗑️ Clear Queue</button>
             <button id="resetLimitsBtn" class="qp-btn qp-btn-secondary">⏱️ Reset Guest Cooldowns</button>
           </div>
@@ -278,7 +295,17 @@
         <!-- SPOTIFY LINK -->
         <section class="admin-panel" id="panel-spotify">
           <h2 class="qp-h3 qp-mb-sm">Spotify Account Connection</h2>
-          <p class="qp-text-secondary qp-text-sm qp-mb-lg">Spotify Premium is required on your media device to stream music in full.</p>
+          <p class="qp-text-secondary qp-text-sm qp-mb-lg">A Spotify Premium account is required to stream full songs through your browser player.</p>
+
+          <div class="qp-card qp-mb-lg" style="padding:1rem; font-size:.9rem; line-height:1.6">
+            <strong>How it works:</strong>
+            <ol style="padding-left:1.2rem; margin-top:.3rem; color:var(--qp-text-secondary)">
+              <li>Click "Connect Spotify Account" below</li>
+              <li>Log in with your <strong>personal Spotify Premium</strong> account</li>
+              <li>Once connected, open the <strong>Player page</strong> (sidebar link) on your laptop</li>
+              <li>Guests scan the QR code, add songs, and they play automatically</li>
+            </ol>
+          </div>
 
           <div id="spotifyStatusBox" class="qp-card qp-mb-lg">
             <!-- Connected details loaded dynamically -->
@@ -330,13 +357,14 @@
 
     // Toggle panels
     document.querySelectorAll('.admin-nav-item').forEach(item => {
-      item.addEventListener('click', () => {
+      item.addEventListener('click', (e) => {
+        if (!item.dataset.target) return; // external link, let it navigate
         document.querySelectorAll('.admin-nav-item').forEach(i => i.classList.remove('active'));
         document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
-
         item.classList.add('active');
         document.getElementById(`panel-${item.dataset.target}`).classList.add('active');
       });
+    });
     });
 
     // Login Form
@@ -467,14 +495,34 @@
 
     async function loadStats() {
       try {
-        const res = await fetch(`/api/venue/${slug}/admin/stats?admin_key=${adminKey}`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
+        const [statsRes, npRes] = await Promise.all([
+          fetch(`/api/venue/${slug}/admin/stats?admin_key=${adminKey}`),
+          fetch(`/api/venue/${slug}/now-playing`)
+        ]);
+        const data = await statsRes.json();
+        const npData = await npRes.json();
+        if (!statsRes.ok) throw new Error(data.error);
 
         document.getElementById('statQueue').textContent = data.queueCount;
         document.getElementById('statTotal').textContent = data.totalPlayed;
         document.getElementById('statToday').textContent = data.todayPlayed;
         document.getElementById('statGuests').textContent = data.activeGuests;
+
+        // Update checklist — guest step
+        const checkGuestIcon = document.getElementById('checkGuestIcon');
+        const checkGuestText = document.getElementById('checkGuest');
+        if (data.totalPlayed > 0 || data.queueCount > 0) {
+          checkGuestIcon.textContent = '✅';
+          checkGuestText.style.color = '#4ade80';
+        }
+
+        // Update checklist — player step (if now_playing exists and spotify connected)
+        const checkPlayerIcon = document.getElementById('checkPlayerIcon');
+        const checkPlayerText = document.getElementById('checkPlayer');
+        if (npData.nowPlaying) {
+          checkPlayerIcon.textContent = '✅';
+          checkPlayerText.style.color = '#4ade80';
+        }
 
         const list = document.getElementById('topSongsList');
         if (data.topSongs.length === 0) {
@@ -544,6 +592,19 @@
 
         venue = data.venue;
         document.getElementById('dashVenueName').textContent = venue.name;
+
+        // Set player page link
+        document.getElementById('playerPageLink').href = `/player/${slug}`;
+
+        // Update setup checklist
+        const checkSpotifyIcon = document.getElementById('checkSpotifyIcon');
+        const checkSpotifyText = document.getElementById('checkSpotify');
+        if (venue.spotify_connected) {
+          checkSpotifyIcon.textContent = '✅';
+          checkSpotifyText.style.color = '#4ade80';
+        } else {
+          checkSpotifyIcon.textContent = '❌';
+        }
 
         // Branding
         document.getElementById('brandPageTitle').value = venue.page_title || '';
