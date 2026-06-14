@@ -6,3 +6,4 @@ database/*.db-*
 .DS_Store
 .vscode/
 .idea/
+.vercel

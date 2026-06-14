@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QueuePlay - Pricing</title>
+  <link rel="stylesheet" href="/assets/design-system.css">
+  <style>
+    .nav{display:flex;justify-content:space-between;align-items:center;padding:1.25rem 0;position:relative;z-index:10}
+    .nav-brand{display:flex;align-items:center;gap:.6rem;font-size:1.3rem;font-weight:700}
+    .nav-brand-icon{width:34px;height:34px;border-radius:var(--qp-radius-sm);background:linear-gradient(135deg,var(--qp-primary),var(--qp-secondary));display:flex;align-items:center;justify-content:center;font-size:1rem}
+    .nav-links{display:flex;align-items:center;gap:1.5rem}
+    .nav-links a{font-size:.9rem;color:var(--qp-text-secondary);transition:color var(--qp-transition)}
+    .nav-links a:hover{color:var(--qp-text)}
+
+    .pricing-header{text-align:center;padding:4rem 0 3rem;position:relative;z-index:1}
+    .pricing-header p{color:var(--qp-text-secondary);font-size:1.1rem;margin-top:.75rem;max-width:500px;margin-left:auto;margin-right:auto}
+
+    .billing-toggle{
+      display:inline-flex;align-items:center;gap:.75rem;
+      padding:.35rem;background:var(--qp-glass);
+      border:1px solid var(--qp-glass-border);
+      border-radius:var(--qp-radius-full);margin-top:1.5rem;
+    }
+    .billing-toggle button{
+      padding:.45rem 1.1rem;font-size:.85rem;font-weight:600;
+      border:none;border-radius:var(--qp-radius-full);
+      background:transparent;color:var(--qp-text-secondary);
+      cursor:pointer;transition:all var(--qp-transition);
+    }
+    .billing-toggle button.active{background:var(--qp-primary);color:#fff}
+    .billing-save{font-size:.72rem;font-weight:600;color:#4ade80;margin-left:.25rem}
+
+    .pricing-grid{
+      display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+      gap:1.25rem;margin-top:2rem;position:relative;z-index:1;
+      max-width:1120px;margin-left:auto;margin-right:auto;
+    }
+
+    .plan-card{
+      padding:2rem 1.5rem;
+      background:var(--qp-bg-card);
+      border:1px solid var(--qp-glass-border);
+      border-radius:var(--qp-radius-xl);
+      backdrop-filter:blur(24px);
+      display:flex;flex-direction:column;
+      transition:all var(--qp-transition);
+      position:relative;overflow:hidden;
+    }
+    .plan-card:hover{border-color:var(--qp-glass-border-hover);transform:translateY(-4px);box-shadow:var(--qp-shadow-lg)}
+    .plan-card.featured{border-color:color-mix(in srgb, var(--qp-primary) 40%, transparent);box-shadow:var(--qp-shadow-glow)}
+    .plan-card.featured::before{
+      content:'';position:absolute;top:0;left:0;right:0;height:3px;
+      background:linear-gradient(90deg,var(--qp-primary),var(--qp-secondary),var(--qp-accent));
+    }
+
+    .plan-badge{
+      display:inline-flex;align-self:flex-start;
+      padding:.2rem .6rem;font-size:.68rem;font-weight:700;
+      text-transform:uppercase;letter-spacing:.05em;
+      border-radius:var(--qp-radius-full);
+      background:linear-gradient(135deg,var(--qp-primary),var(--qp-secondary));
+      color:#fff;margin-bottom:.75rem;
+    }
+
+    .plan-name{font-size:1.2rem;font-weight:700;margin-bottom:.3rem}
+    .plan-desc{font-size:.85rem;color:var(--qp-text-muted);margin-bottom:1.25rem;line-height:1.5}
+
+    .plan-price{margin-bottom:1.5rem}
+    .plan-amount{font-size:2.8rem;font-weight:800;line-height:1}
+    .plan-currency{font-size:1.1rem;font-weight:600;color:var(--qp-text-secondary);vertical-align:super}
+    .plan-period{font-size:.85rem;color:var(--qp-text-muted);margin-top:.2rem}
+
+    .plan-features{list-style:none;flex:1;margin-bottom:1.5rem}
+    .plan-features li{
+      display:flex;align-items:flex-start;gap:.5rem;
+      font-size:.88rem;color:var(--qp-text-secondary);
+      padding:.4rem 0;
+    }
+    .plan-features li::before{
+      content:'';flex-shrink:0;
+      width:18px;height:18px;margin-top:2px;
+      border-radius:50%;
+      background:color-mix(in srgb, var(--qp-primary) 15%, transparent);
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='8' fill='none'%3E%3Cpath d='M1 4l2.5 2.5L9 1' stroke='%238b5cf6' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;background-position:center;
+    }
+
+    .plan-cta{margin-top:auto}
+    .plan-cta .qp-btn{width:100%;justify-content:center}
+
+    .faq{max-width:700px;margin:4rem auto;position:relative;z-index:1}
+    .faq-item{border-bottom:1px solid var(--qp-glass-border);padding:1.25rem 0}
+    .faq-q{font-weight:600;font-size:1rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+    .faq-q::after{content:'+';font-size:1.3rem;color:var(--qp-text-muted);transition:transform var(--qp-transition)}
+    .faq-item.open .faq-q::after{transform:rotate(45deg)}
+    .faq-a{font-size:.9rem;color:var(--qp-text-secondary);line-height:1.7;max-height:0;overflow:hidden;transition:all .3s ease}
+    .faq-item.open .faq-a{max-height:200px;margin-top:.75rem}
+
+    footer{padding:3rem 0;text-align:center;color:var(--qp-text-muted);font-size:.85rem;border-top:1px solid var(--qp-glass-border);position:relative;z-index:1}
+  </style>
+</head>
+<body>
+  <div class="qp-container">
+    <nav class="nav">
+      <a href="/" class="nav-brand"><span class="nav-brand-icon">Q</span><span>QueuePlay</span></a>
+      <div class="nav-links">
+        <a href="/">Home</a>
+        <a href="/register" class="qp-btn qp-btn-primary qp-btn-sm">Get Started</a>
+      </div>
+    </nav>
+
+    <section class="pricing-header">
+      <h1 class="qp-h1">Simple, transparent <span class="qp-gradient-text">pricing.</span></h1>
+      <p>Start free. Upgrade as your venue grows. No hidden fees, cancel anytime.</p>
+      <div class="billing-toggle">
+        <button class="active" data-billing="monthly">Monthly</button>
+        <button data-billing="yearly">Yearly <span class="billing-save">Save 17%</span></button>
+      </div>
+    </section>
+
+    <div class="pricing-grid" id="pricingGrid">
+      <!-- Plans loaded dynamically -->
+    </div>
+
+    <section class="faq">
+      <h2 class="qp-h2 qp-text-center qp-mb-lg">Frequently asked questions</h2>
+      <div class="faq-item">
+        <div class="faq-q">Do I need Spotify Premium?</div>
+        <div class="faq-a">Yes, the venue owner needs a Spotify Premium account to play full songs through the speakers. Guests do not need any Spotify account -- they just search and add.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Can guests install an app?</div>
+        <div class="faq-a">No app needed. Guests scan a QR code and land on a mobile-optimized web page. It works instantly in any browser.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">How do I control what gets played?</div>
+        <div class="faq-a">You have full admin controls: skip songs, remove items from the queue, block specific tracks, filter explicit content, and set rate limits per guest.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Can I use my own branding?</div>
+        <div class="faq-a">On Starter plans and above, you can customize colors, logo, fonts, welcome message, and even inject custom CSS. Your guests see your brand, not ours.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">What happens when the queue is empty?</div>
+        <div class="faq-a">When no songs are queued, the player simply waits. You can optionally set up a fallback playlist on your Spotify account.</div>
+      </div>
+    </section>
+
+    <footer><p>QueuePlay &mdash; Guest-powered music for modern venues.</p></footer>
+  </div>
+
+  <script>
+    let billing = 'monthly';
+
+    document.querySelectorAll('.billing-toggle button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.billing-toggle button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        billing = btn.dataset.billing;
+        renderPlans();
+      });
+    });
+
+    document.querySelectorAll('.faq-q').forEach(q => {
+      q.addEventListener('click', () => q.parentElement.classList.toggle('open'));
+    });
+
+    async function renderPlans() {
+      try {
+        const res = await fetch('/api/plans');
+        const { plans } = await res.json();
+
+        document.getElementById('pricingGrid').innerHTML = plans.map(plan => {
+          const price = billing === 'yearly' ? plan.price_yearly : plan.price_monthly;
+          const period = billing === 'yearly' ? '/year' : '/month';
+          const isFeatured = plan.id === 'pro';
+          const isFree = plan.id === 'free';
+
+          return `
+            <div class="plan-card ${isFeatured ? 'featured' : ''}">
+              ${isFeatured ? '<div class="plan-badge">Most Popular</div>' : ''}
+              <div class="plan-name">${plan.name}</div>
+              <div class="plan-desc">${plan.description}</div>
+              <div class="plan-price">
+                <div class="plan-amount">
+                  ${isFree ? 'Free' : `<span class="plan-currency">$</span>${price.toFixed(0)}`}
+                </div>
+                ${!isFree ? `<div class="plan-period">${period}</div>` : '<div class="plan-period">forever</div>'}
+              </div>
+              <ul class="plan-features">
+                ${plan.features.map(f => `<li>${f}</li>`).join('')}
+              </ul>
+              <div class="plan-cta">
+                <a href="/register?plan=${plan.id}" class="qp-btn ${isFeatured ? 'qp-btn-primary' : 'qp-btn-secondary'}">
+                  ${isFree ? 'Start Free' : `Choose ${plan.name}`}
+                </a>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('Failed to load plans:', err);
+      }
+    }
+
+    renderPlans();
+  </script>
+</body>
+</html>

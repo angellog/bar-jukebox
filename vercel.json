@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "src/server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/assets/(.*)",
+      "dest": "public/assets/$1"
+    },
+    {
+      "src": "/v/(.*)",
+      "dest": "src/server.js"
+    },
+    {
+      "src": "/admin/(.*)",
+      "dest": "src/server.js"
+    },
+    {
+      "src": "/player/(.*)",
+      "dest": "src/server.js"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "src/server.js"
+    },
+    {
+      "src": "/auth/(.*)",
+      "dest": "src/server.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "src/server.js"
+    }
+  ]
+}

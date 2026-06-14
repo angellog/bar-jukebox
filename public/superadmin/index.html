@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QueuePlay Platform Super Admin</title>
+  <link rel="stylesheet" href="/assets/design-system.css">
+  <style>
+    .super-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1.5rem;
+    }
+    .super-table th, .super-table td {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--qp-glass-border);
+    }
+    .super-table th {
+      font-weight: 600;
+      color: var(--qp-text-secondary);
+      background: var(--qp-glass);
+    }
+    .super-table tbody tr:hover {
+      background: var(--qp-glass);
+    }
+    .mrr-highlight {
+      font-size: 2.5rem;
+      font-weight: 800;
+      color: #4ade80;
+    }
+  </style>
+</head>
+<body>
+  <!-- PASS KEY ENTRY -->
+  <div id="authGate" class="qp-container-sm qp-mt-xl">
+    <div class="qp-card">
+      <h1 class="qp-h3 qp-text-center qp-mb-md">🔑 Platform Super Admin Verification</h1>
+      <form id="authForm">
+        <div class="qp-mb-md">
+          <label class="qp-label">Platform Master Key</label>
+          <input type="password" id="masterKeyInput" class="qp-input" placeholder="Enter SUPER_ADMIN_KEY" required>
+        </div>
+        <button type="submit" class="qp-btn qp-btn-primary qp-w-full">Open Master Control</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MAIN ADMIN -->
+  <div id="superadminSection" class="qp-container-lg qp-hidden qp-mt-xl">
+    <div class="qp-flex qp-items-center qp-justify-between qp-mb-xl">
+      <div>
+        <h1 class="qp-h2">🌐 Master Control Dashboard</h1>
+        <p class="qp-text-secondary qp-text-sm">Manage subscription metrics, platforms, databases, and venues.</p>
+      </div>
+      <button id="logoutBtn" class="qp-btn qp-btn-secondary qp-btn-sm">Log Out</button>
+    </div>
+
+    <!-- Stats -->
+    <div class="qp-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2.5rem">
+      <div class="qp-stat">
+        <div class="mrr-highlight" id="statMRR">$0</div>
+        <div class="qp-stat-label">Estimated Monthly Recurring Revenue</div>
+      </div>
+      <div class="qp-stat">
+        <div class="qp-stat-value" id="statTotalVenues">0</div>
+        <div class="qp-stat-label">Total Cafes / Venues</div>
+      </div>
+      <div class="qp-stat">
+        <div class="qp-stat-value" id="statSongsPlayed">0</div>
+        <div class="qp-stat-label">Songs Played Overall</div>
+      </div>
+      <div class="qp-stat">
+        <div class="qp-stat-value" id="statActiveUsers">0</div>
+        <div class="qp-stat-label">Total Connected Guests</div>
+      </div>
+    </div>
+
+    <!-- Venue Manager Table -->
+    <div class="qp-card">
+      <h2 class="qp-h3">Platform Venues</h2>
+      <div style="overflow-x: auto">
+        <table class="super-table" id="venuesTable">
+          <thead>
+            <tr>
+              <th>Venue Name</th>
+              <th>Slug / URL</th>
+              <th>Type</th>
+              <th>Email</th>
+              <th>Current Plan</th>
+              <th>Guest Sessions</th>
+              <th>Songs Played</th>
+              <th>Created At</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Loaded dynamically -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="qp-toast-container" id="toastContainer"></div>
+
+  <script>
+    let masterKey = localStorage.getItem('qp_super_key');
+
+    // Toast manager
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `qp-toast qp-toast-${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.animation = 'qp-toast-out 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // Gate password entry
+    document.getElementById('authForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      masterKey = document.getElementById('masterKeyInput').value;
+      localStorage.setItem('qp_super_key', masterKey);
+      initSuperadmin();
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      localStorage.removeItem('qp_super_key');
+      location.reload();
+    });
+
+    async function initSuperadmin() {
+      document.getElementById('authGate').classList.add('qp-hidden');
+      document.getElementById('superadminSection').classList.remove('qp-hidden');
+
+      try {
+        await loadPlatformMetrics();
+        await loadPlatformVenues();
+      } catch (err) {
+        showToast('Auth verification failed. Check master key.', 'error');
+        localStorage.removeItem('qp_super_key');
+        document.getElementById('authGate').classList.remove('qp-hidden');
+        document.getElementById('superadminSection').classList.add('qp-hidden');
+      }
+    }
+
+    async function loadPlatformMetrics() {
+      const res = await fetch('/api/superadmin/stats', {
+        headers: { 'x-super-key': masterKey }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      document.getElementById('statMRR').textContent = `$${data.totalMRR.toFixed(2)}`;
+      document.getElementById('statTotalVenues').textContent = data.totalVenues;
+      document.getElementById('statSongsPlayed').textContent = data.totalSongsPlayed;
+      document.getElementById('statActiveUsers').textContent = data.totalGuests;
+    }
+
+    async function loadPlatformVenues() {
+      const res = await fetch('/api/superadmin/venues', {
+        headers: { 'x-super-key': masterKey }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      const tbody = document.querySelector('#venuesTable tbody');
+      if (data.venues.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="qp-text-center qp-text-muted">No venues registered yet.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = data.venues.map(v => `
+        <tr>
+          <td style="font-weight:600">${escapeHTML(v.name)}</td>
+          <td><a href="/v/${v.slug}" target="_blank" style="text-decoration:underline; font-family:monospace">/v/${v.slug}</a></td>
+          <td>${v.type}</td>
+          <td>${v.email || '-'}</td>
+          <td>
+            <select class="qp-select plan-change-select" data-id="${v.id}" style="padding:.25rem .5rem; font-size:.8rem; border-radius:4px; height:auto; width:auto">
+              <option value="free" ${v.plan_id === 'free' ? 'selected' : ''}>Free</option>
+              <option value="starter" ${v.plan_id === 'starter' ? 'selected' : ''}>Starter</option>
+              <option value="pro" ${v.plan_id === 'pro' ? 'selected' : ''}>Pro</option>
+              <option value="enterprise" ${v.plan_id === 'enterprise' ? 'selected' : ''}>Enterprise</option>
+            </select>
+          </td>
+          <td>${v.total_guests}</td>
+          <td>${v.total_played}</td>
+          <td style="font-size:.8rem; color:var(--qp-text-muted)">${new Date(v.created_at).toLocaleDateString()}</td>
+          <td>
+            <button class="qp-btn qp-btn-secondary qp-btn-sm delete-venue-btn" data-id="${v.id}" style="color:#f87171; padding:.25rem .5rem; font-size:.78rem">Delete</button>
+          </td>
+        </tr>
+      `).join('');
+
+      // Plan change listener
+      document.querySelectorAll('.plan-change-select').forEach(select => {
+        select.addEventListener('change', async () => {
+          const venueId = select.dataset.id;
+          const planId = select.value;
+
+          try {
+            const res = await fetch(`/api/superadmin/venues/${venueId}/plan`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-super-key': masterKey
+              },
+              body: JSON.stringify({ planId })
+            });
+
+            if (!res.ok) throw new Error('Failed to update plan');
+            showToast('Venue subscription plan updated!');
+            loadPlatformMetrics();
+          } catch (err) {
+            showToast(err.message, 'error');
+          }
+        });
+      });
+
+      // Delete venue listener
+      document.querySelectorAll('.delete-venue-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!confirm('Are you sure you want to permanently delete this venue and all associated databases/queues?')) return;
+          const venueId = btn.dataset.id;
+
+          try {
+            const res = await fetch(`/api/superadmin/venues/${venueId}`, {
+              method: 'DELETE',
+              headers: { 'x-super-key': masterKey }
+            });
+
+            if (!res.ok) throw new Error('Failed to delete venue');
+            showToast('Venue deleted permanently');
+            loadPlatformVenues();
+            loadPlatformMetrics();
+          } catch (err) {
+            showToast(err.message, 'error');
+          }
+        });
+      });
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/[&<>'"]/g, 
+        tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+      );
+    }
+
+    // Auto init if master key saved
+    if (masterKey) {
+      initSuperadmin();
+    }
+  </script>
+</body>
+</html>

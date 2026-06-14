@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="QueuePlay - Let your guests pick the music. White-label music queue for cafes, restaurants, and public spaces.">
+  <title>QueuePlay - Guest-Powered Music for Your Venue</title>
+  <link rel="stylesheet" href="/assets/design-system.css">
+  <style>
+    /* HERO */
+    .hero{padding:6rem 0 4rem;text-align:center;position:relative;z-index:1}
+    .hero-badge{
+      display:inline-flex;align-items:center;gap:.4rem;
+      padding:.35rem .9rem;font-size:.78rem;font-weight:600;
+      border-radius:var(--qp-radius-full);
+      background:color-mix(in srgb, var(--qp-primary) 12%, transparent);
+      color:var(--qp-primary-light);
+      border:1px solid color-mix(in srgb, var(--qp-primary) 20%, transparent);
+      margin-bottom:1.5rem;
+    }
+    .hero h1{margin-bottom:1.25rem}
+    .hero p{font-size:1.15rem;color:var(--qp-text-secondary);max-width:580px;margin:0 auto 2.5rem}
+    .hero-actions{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+
+    /* DEMO MOCKUP */
+    .hero-mockup{
+      max-width:420px;margin:3.5rem auto 0;
+      background:var(--qp-bg-card);
+      border:1px solid var(--qp-glass-border);
+      border-radius:var(--qp-radius-xl);
+      padding:1.5rem;
+      box-shadow:var(--qp-shadow-lg),var(--qp-shadow-glow);
+      position:relative;
+    }
+    .mockup-header{display:flex;align-items:center;gap:.75rem;margin-bottom:1.25rem}
+    .mockup-logo{width:36px;height:36px;border-radius:var(--qp-radius-sm);background:linear-gradient(135deg,var(--qp-primary),var(--qp-secondary));display:flex;align-items:center;justify-content:center;font-size:1.1rem}
+    .mockup-name{font-weight:600;font-size:1.05rem}
+    .mockup-search{
+      width:100%;padding:.65rem 1rem .65rem 2.5rem;
+      background:var(--qp-glass);border:1px solid var(--qp-glass-border);
+      border-radius:var(--qp-radius-full);color:var(--qp-text-muted);font-size:.9rem;
+      position:relative;
+    }
+    .mockup-search-wrap{position:relative;margin-bottom:1rem}
+    .mockup-search-wrap::before{content:'';position:absolute;left:.85rem;top:50%;transform:translateY(-50%);width:14px;height:14px;border:2px solid var(--qp-text-muted);border-radius:50%;pointer-events:none}
+    .mockup-song{
+      display:flex;align-items:center;gap:.75rem;
+      padding:.65rem;border-radius:var(--qp-radius-md);
+      background:var(--qp-glass);border:1px solid var(--qp-glass-border);
+      margin-bottom:.5rem;
+    }
+    .mockup-art{width:42px;height:42px;border-radius:6px;flex-shrink:0}
+    .mockup-art-1{background:linear-gradient(135deg,#ff6b6b,#ee5a24)}
+    .mockup-art-2{background:linear-gradient(135deg,#48dbfb,#0abde3)}
+    .mockup-art-3{background:linear-gradient(135deg,#feca57,#ff9f43)}
+    .mockup-song-info{flex:1;min-width:0}
+    .mockup-song-title{font-size:.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .mockup-song-artist{font-size:.75rem;color:var(--qp-text-muted)}
+    .mockup-add{
+      padding:.3rem .7rem;font-size:.72rem;font-weight:600;
+      background:linear-gradient(135deg,var(--qp-primary),var(--qp-secondary));
+      border:none;border-radius:var(--qp-radius-sm);color:#fff;
+      cursor:default;flex-shrink:0;
+    }
+
+    /* FEATURES */
+    .features{padding:5rem 0}
+    .features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem;margin-top:2.5rem}
+    .feature-card{padding:1.75rem}
+    .feature-icon{
+      width:48px;height:48px;border-radius:var(--qp-radius-md);
+      display:flex;align-items:center;justify-content:center;font-size:1.5rem;
+      background:color-mix(in srgb, var(--qp-primary) 12%, transparent);
+      margin-bottom:1rem;
+    }
+    .feature-card h3{font-size:1.1rem;font-weight:600;margin-bottom:.5rem}
+    .feature-card p{font-size:.9rem;color:var(--qp-text-secondary);line-height:1.6}
+
+    /* HOW IT WORKS */
+    .how{padding:5rem 0}
+    .how-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:2rem;margin-top:2.5rem;counter-reset:step}
+    .how-step{text-align:center;position:relative}
+    .how-step::before{
+      counter-increment:step;content:counter(step);
+      display:flex;align-items:center;justify-content:center;
+      width:52px;height:52px;margin:0 auto 1rem;
+      font-size:1.3rem;font-weight:700;
+      border-radius:var(--qp-radius-full);
+      background:linear-gradient(135deg,var(--qp-primary),var(--qp-secondary));
+      color:#fff;
+      box-shadow:0 4px 16px color-mix(in srgb, var(--qp-primary) 30%, transparent);
+    }
+    .how-step h3{font-size:1.05rem;font-weight:600;margin-bottom:.4rem}
+    .how-step p{font-size:.88rem;color:var(--qp-text-secondary)}
+
+    /* VENUE TYPES */
+    .venues{padding:5rem 0}
+    .venue-types{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-top:2rem}
+    .venue-type{
+      padding:1.5rem;text-align:center;
+      background:var(--qp-bg-card);border:1px solid var(--qp-glass-border);
+      border-radius:var(--qp-radius-lg);transition:all var(--qp-transition);
+    }
+    .venue-type:hover{border-color:var(--qp-glass-border-hover);transform:translateY(-3px);box-shadow:var(--qp-shadow-md)}
+    .venue-type-icon{font-size:2.2rem;margin-bottom:.75rem}
+    .venue-type-name{font-weight:600;font-size:.95rem}
+
+    /* CTA */
+    .cta{padding:5rem 0;text-align:center}
+    .cta-box{
+      padding:3.5rem 2rem;
+      background:var(--qp-bg-card);border:1px solid var(--qp-glass-border);
+      border-radius:var(--qp-radius-xl);
+      box-shadow:var(--qp-shadow-lg);
+      position:relative;overflow:hidden;
+    }
+    .cta-box::before{
+      content:'';position:absolute;inset:0;
+      background:linear-gradient(135deg,color-mix(in srgb,var(--qp-primary) 10%,transparent),transparent,color-mix(in srgb,var(--qp-secondary) 8%,transparent));
+      pointer-events:none;
+    }
+
+    /* NAV */
+    .nav{display:flex;justify-content:space-between;align-items:center;padding:1.25rem 0;position:relative;z-index:10}
+    .nav-brand{display:flex;align-items:center;gap:.6rem;font-size:1.3rem;font-weight:700}
+    .nav-brand-icon{
+      width:34px;height:34px;border-radius:var(--qp-radius-sm);
+      background:linear-gradient(135deg,var(--qp-primary),var(--qp-secondary));
+      display:flex;align-items:center;justify-content:center;font-size:1rem;
+    }
+    .nav-links{display:flex;align-items:center;gap:1.5rem}
+    .nav-links a{font-size:.9rem;color:var(--qp-text-secondary);transition:color var(--qp-transition)}
+    .nav-links a:hover{color:var(--qp-text)}
+
+    /* FOOTER */
+    footer{padding:3rem 0;text-align:center;color:var(--qp-text-muted);font-size:.85rem;border-top:1px solid var(--qp-glass-border)}
+
+    @media(max-width:640px){
+      .hero{padding:3.5rem 0 2.5rem}
+      .nav-links .qp-btn{display:none}
+    }
+  </style>
+</head>
+<body>
+  <div class="qp-container">
+    <!-- NAV -->
+    <nav class="nav">
+      <a href="/" class="nav-brand">
+        <span class="nav-brand-icon">Q</span>
+        <span>QueuePlay</span>
+      </a>
+      <div class="nav-links">
+        <a href="/pricing">Pricing</a>
+        <a href="/register" class="qp-btn qp-btn-primary qp-btn-sm">Get Started</a>
+      </div>
+    </nav>
+
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-badge">New: Custom branding for every venue</div>
+      <h1 class="qp-h1">Let your guests<br><span class="qp-gradient-text">pick the music.</span></h1>
+      <p>Guests scan a QR code, search Spotify, and add one song to your venue's shared queue. Simple, elegant, and fully branded to your business.</p>
+      <div class="hero-actions">
+        <a href="/register" class="qp-btn qp-btn-primary qp-btn-lg">Start Free</a>
+        <a href="/pricing" class="qp-btn qp-btn-secondary qp-btn-lg">See Plans</a>
+      </div>
+
+      <!-- INTERACTIVE MOCKUP -->
+      <div class="hero-mockup">
+        <div class="mockup-header">
+          <div class="mockup-logo">C</div>
+          <div>
+            <div class="mockup-name">Cloud Nine Cafe</div>
+            <div style="font-size:.75rem;color:var(--qp-text-muted)">Pick a song to play</div>
+          </div>
+        </div>
+        <div class="mockup-search-wrap">
+          <input class="mockup-search" value="Search for a song..." readonly>
+        </div>
+        <div class="mockup-song">
+          <div class="mockup-art mockup-art-1"></div>
+          <div class="mockup-song-info">
+            <div class="mockup-song-title">Blinding Lights</div>
+            <div class="mockup-song-artist">The Weeknd</div>
+          </div>
+          <div class="mockup-add">Add</div>
+        </div>
+        <div class="mockup-song">
+          <div class="mockup-art mockup-art-2"></div>
+          <div class="mockup-song-info">
+            <div class="mockup-song-title">Levitating</div>
+            <div class="mockup-song-artist">Dua Lipa</div>
+          </div>
+          <div class="mockup-add">Add</div>
+        </div>
+        <div class="mockup-song">
+          <div class="mockup-art mockup-art-3"></div>
+          <div class="mockup-song-info">
+            <div class="mockup-song-title">Sunflower</div>
+            <div class="mockup-song-artist">Post Malone</div>
+          </div>
+          <div class="mockup-add">Add</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section class="features">
+      <h2 class="qp-h2 qp-text-center">Everything you need to <span class="qp-gradient-text">run your music.</span></h2>
+      <div class="features-grid">
+        <div class="feature-card qp-card qp-card-glow">
+          <div class="feature-icon">&#x1F3B5;</div>
+          <h3>Spotify-Powered Search</h3>
+          <p>Guests search millions of songs from Spotify's catalog. Results appear instantly as they type.</p>
+        </div>
+        <div class="feature-card qp-card qp-card-glow">
+          <div class="feature-icon">&#x1F4F1;</div>
+          <h3>QR Code Entry</h3>
+          <p>Print a QR code for your tables. Guests scan it with their camera and land on your branded page -- no app install needed.</p>
+        </div>
+        <div class="feature-card qp-card qp-card-glow">
+          <div class="feature-icon">&#x23F1;</div>
+          <h3>Smart Rate Limiting</h3>
+          <p>Each guest gets one song, then a cooldown. No one hogs the queue. You control the cooldown time.</p>
+        </div>
+        <div class="feature-card qp-card qp-card-glow">
+          <div class="feature-icon">&#x1F3A8;</div>
+          <h3>Full Brand Customization</h3>
+          <p>Your logo, your colors, your fonts. Every guest page is a reflection of your venue's identity.</p>
+        </div>
+        <div class="feature-card qp-card qp-card-glow">
+          <div class="feature-icon">&#x1F4CA;</div>
+          <h3>Analytics Dashboard</h3>
+          <p>See what your guests love. Track play history, peak hours, and popular songs -- all in real time.</p>
+        </div>
+        <div class="feature-card qp-card qp-card-glow">
+          <div class="feature-icon">&#x1F510;</div>
+          <h3>Admin Controls</h3>
+          <p>Skip, remove, or clear the queue at any time. Block songs. Filter explicit content. You stay in control.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section class="how">
+      <h2 class="qp-h2 qp-text-center">How it works</h2>
+      <div class="how-steps">
+        <div class="how-step">
+          <h3>Register your venue</h3>
+          <p>Sign up, name your space, and pick your brand colors. Takes 30 seconds.</p>
+        </div>
+        <div class="how-step">
+          <h3>Connect Spotify</h3>
+          <p>Link your Spotify Premium account so songs play through your speakers.</p>
+        </div>
+        <div class="how-step">
+          <h3>Print the QR code</h3>
+          <p>Download and display the auto-generated QR code at your tables or counter.</p>
+        </div>
+        <div class="how-step">
+          <h3>Guests pick songs</h3>
+          <p>They scan, search, and add a song. It shows up in the queue and plays on your system.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- VENUE TYPES -->
+    <section class="venues">
+      <h2 class="qp-h2 qp-text-center">Built for <span class="qp-gradient-text">every space</span></h2>
+      <div class="venue-types">
+        <div class="venue-type">
+          <div class="venue-type-icon">&#x2615;</div>
+          <div class="venue-type-name">Coffee Shops</div>
+        </div>
+        <div class="venue-type">
+          <div class="venue-type-icon">&#x1F37D;</div>
+          <div class="venue-type-name">Restaurants</div>
+        </div>
+        <div class="venue-type">
+          <div class="venue-type-icon">&#x1F378;</div>
+          <div class="venue-type-name">Bars & Lounges</div>
+        </div>
+        <div class="venue-type">
+          <div class="venue-type-icon">&#x1F33F;</div>
+          <div class="venue-type-name">Garden Spaces</div>
+        </div>
+        <div class="venue-type">
+          <div class="venue-type-icon">&#x1F4BB;</div>
+          <div class="venue-type-name">Co-working</div>
+        </div>
+        <div class="venue-type">
+          <div class="venue-type-icon">&#x1F3E8;</div>
+          <div class="venue-type-name">Hotels & Lobbies</div>
+        </div>
+        <div class="venue-type">
+          <div class="venue-type-icon">&#x1F488;</div>
+          <div class="venue-type-name">Salons & Spas</div>
+        </div>
+        <div class="venue-type">
+          <div class="venue-type-icon">&#x1F3CB;</div>
+          <div class="venue-type-name">Gyms & Studios</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta">
+      <div class="cta-box">
+        <h2 class="qp-h2" style="margin-bottom:.75rem;position:relative;z-index:1">Ready to let your guests <span class="qp-gradient-text">set the vibe?</span></h2>
+        <p style="color:var(--qp-text-secondary);margin-bottom:2rem;position:relative;z-index:1">Start free. Upgrade when you need more.</p>
+        <a href="/register" class="qp-btn qp-btn-primary qp-btn-lg" style="position:relative;z-index:1">Create Your Venue</a>
+      </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+      <p>QueuePlay &mdash; Guest-powered music for modern venues.</p>
+    </footer>
+  </div>
+</body>
+</html>

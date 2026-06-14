@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Request songs directly from your phone at this venue.">
+  <title>Music Jukebox</title>
+  <link rel="stylesheet" href="/assets/design-system.css">
+  <style>
+    /* Premium Spotify-Inspired Custom Styling */
+    :root {
+      --spotify-green: #1db954;
+      --spotify-black: #121212;
+      --spotify-dark-grey: #181818;
+      --spotify-light-grey: #282828;
+    }
+    
+    body {
+      background-color: var(--spotify-black);
+      color: #ffffff;
+      padding-bottom: 5rem;
+    }
+
+    header {
+      padding: 3rem 1.5rem 2rem;
+      text-align: center;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--qp-primary) 15%, transparent) 0%, var(--spotify-black) 100%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      margin-bottom: 1.5rem;
+    }
+
+    .venue-logo {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      margin: 0 auto 1.25rem;
+      object-fit: cover;
+      display: none;
+      border: 3px solid #fff;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      transition: transform 0.3s ease;
+    }
+    .venue-logo:hover {
+      transform: scale(1.05);
+    }
+
+    .venue-welcome {
+      margin-top: 0.5rem;
+      font-size: 1rem;
+      color: var(--qp-text-secondary);
+      font-weight: 400;
+      max-width: 450px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* Guest details widget */
+    .guest-name-field {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: var(--spotify-dark-grey);
+    }
+
+    /* Main Grid Layout */
+    .guest-layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2rem;
+    }
+    @media (min-width: 992px) {
+      .guest-layout {
+        grid-template-columns: 1.25fr 0.75fr;
+      }
+    }
+
+    /* Search area styling */
+    .search-card {
+      background: var(--spotify-dark-grey);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: var(--qp-radius-lg);
+    }
+    .search-input-spotify {
+      background: var(--spotify-light-grey);
+      border: 1px solid transparent;
+      color: #fff;
+      border-radius: 500px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      padding-left: 3rem;
+    }
+    .search-input-spotify:focus {
+      border-color: rgba(255, 255, 255, 0.2);
+      box-shadow: none;
+      background: #333333;
+    }
+
+    /* Spotify list view */
+    .search-results-box {
+      margin-top: 1.5rem;
+      max-height: 480px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    /* Song row Spotify styles */
+    .qp-song-row {
+      background: transparent;
+      border: 1px solid transparent;
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      transition: background 0.2s ease;
+    }
+    .qp-song-row:hover {
+      background: rgba(255, 255, 255, 0.08);
+      transform: none;
+      border-color: transparent;
+    }
+    
+    .qp-song-art {
+      width: 48px;
+      height: 48px;
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    .qp-song-title {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: #ffffff;
+    }
+
+    .qp-song-artist {
+      color: var(--qp-text-secondary);
+      font-size: 0.85rem;
+    }
+
+    .add-song-btn {
+      border-radius: 500px;
+      background: #ffffff;
+      color: #000000;
+      font-weight: 700;
+      font-size: 0.8rem;
+      padding: 0.45rem 1.25rem;
+      border: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      transition: transform 0.2s ease, background-color 0.2s ease;
+    }
+    .add-song-btn:hover {
+      transform: scale(1.04);
+      background: #f3f3f3;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    /* Now playing section */
+    .now-playing-spotify {
+      background: linear-gradient(135deg, var(--qp-primary-dark) 0%, var(--spotify-dark-grey) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+      border-radius: var(--qp-radius-lg);
+    }
+
+    .qp-np-art {
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+
+    .qp-progress {
+      background: rgba(255, 255, 255, 0.16);
+      height: 4px;
+      border-radius: 2px;
+      overflow: visible;
+    }
+    .qp-progress-fill {
+      background: #ffffff;
+      border-radius: 2px;
+      position: relative;
+    }
+    .qp-progress-fill::after {
+      content: '';
+      position: absolute;
+      right: -4px;
+      top: -3px;
+      width: 10px;
+      height: 10px;
+      background: #ffffff;
+      border-radius: 50%;
+      opacity: 0;
+      transition: opacity 0.1s ease;
+    }
+    .qp-progress:hover .qp-progress-fill::after {
+      opacity: 1;
+    }
+    .qp-progress:hover .qp-progress-fill {
+      background: var(--spotify-green);
+    }
+
+    /* Up Next card */
+    .queue-card-spotify {
+      background: var(--spotify-dark-grey);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: var(--qp-radius-lg);
+    }
+
+    /* Skeleton screen loader */
+    .skeleton-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.5rem 0.75rem;
+    }
+    .skeleton-art {
+      width: 48px;
+      height: 48px;
+      border-radius: 4px;
+    }
+    .skeleton-text-1 {
+      height: 14px;
+      width: 140px;
+      margin-bottom: 6px;
+    }
+    .skeleton-text-2 {
+      height: 12px;
+      width: 80px;
+    }
+
+    .watermark-banner {
+      color: var(--qp-text-muted);
+      border-top: 1px solid rgba(255,255,255,0.05);
+      margin-top: 3rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Dynamic Branded Header -->
+  <header>
+    <img id="venueLogo" class="venue-logo" src="" alt="Logo">
+    <h1 class="qp-h2" id="venueName">Loading...</h1>
+    <p class="venue-welcome" id="welcomeMessage">Connecting to venue...</p>
+  </header>
+
+  <div class="qp-container-lg">
+    <!-- Guest Name Badge -->
+    <div class="qp-card guest-name-field qp-mb-lg">
+      <label class="qp-label" for="guestName">Your Table / Name (Optional)</label>
+      <input type="text" id="guestName" class="qp-input" placeholder="e.g. Table 4 / Angelo" maxlength="30">
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="guest-layout">
+      <!-- Left column: Search & Catalog -->
+      <section class="guest-search-section">
+        <div class="qp-card search-card">
+          <h2 class="qp-h3 qp-mb-md">Search Songs</h2>
+          
+          <div class="qp-input-group">
+            <span class="qp-input-icon">🔍</span>
+            <input type="text" id="searchInput" class="qp-input search-input-spotify" placeholder="What do you want to play?" autocomplete="off">
+          </div>
+
+          <div id="searchResults" class="search-results-box">
+            <div class="qp-text-center qp-text-muted qp-mt-md qp-text-sm" id="searchPlaceholderText">
+              Type above to discover Spotify tracks to play in this space.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right column: Now Playing & Queue list -->
+      <section class="guest-queue-section">
+        <!-- Live Now Playing spot -->
+        <div id="nowPlayingCard" class="qp-now-playing now-playing-spotify qp-mb-lg qp-hidden">
+          <img class="qp-np-art" id="nowPlayingArt" src="" alt="Album Art">
+          <div class="qp-np-info">
+            <div class="qp-np-label">Now Playing</div>
+            <div class="qp-np-title" id="nowPlayingTitle">-</div>
+            <div class="qp-np-artist" id="nowPlayingArtist">-</div>
+            <div class="qp-progress qp-mt-md">
+              <div class="qp-progress-fill" id="progressFill" style="width: 0%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Queue queue-card-spotify -->
+        <div class="qp-card queue-card-spotify">
+          <div class="qp-flex qp-items-center qp-justify-between qp-mb-md">
+            <h2 class="qp-h3">Up Next</h2>
+            <span class="qp-badge" id="queueCount">0 songs</span>
+          </div>
+
+          <div class="qp-flex qp-flex-col qp-gap-sm" id="queueList">
+            <div class="qp-text-center qp-text-muted qp-mt-md qp-text-sm">Queue is empty. Add a song to get started!</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Toast Notification layer -->
+    <div class="qp-toast-container" id="toastContainer"></div>
+
+    <!-- Watermark banner for free subscriptions -->
+    <div id="watermark" class="watermark-banner qp-hidden">
+      Powered by <a href="/" target="_blank">QueuePlay</a>
+    </div>
+  </div>
+
+  <script>
+    const slug = window.location.pathname.split('/').pop();
+    let venue = null;
+    let ws = null;
+
+    // Toast manager
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `qp-toast qp-toast-${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.animation = 'qp-toast-out 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // Apply branding settings
+    function applyBranding(v) {
+      document.title = v.page_title || `${v.name} Music Stream`;
+      document.getElementById('venueName').textContent = v.name;
+      document.getElementById('welcomeMessage').textContent = v.welcome_message;
+
+      if (v.logo_url) {
+        const logo = document.getElementById('venueLogo');
+        logo.src = v.logo_url;
+        logo.style.display = 'block';
+      }
+
+      // CSS Variables injection
+      const r = document.documentElement.style;
+      if (v.brand_primary) {
+        r.setProperty('--qp-primary', v.brand_primary);
+        r.setProperty('--qp-primary-dark', colorMixDark(v.brand_primary));
+      }
+      if (v.brand_secondary) r.setProperty('--qp-secondary', v.brand_secondary);
+      if (v.brand_accent) r.setProperty('--qp-accent', v.brand_accent);
+      if (v.brand_bg_dark) r.setProperty('--qp-bg', v.brand_bg_dark);
+      if (v.brand_bg_card) r.setProperty('--qp-bg-card', v.brand_bg_card);
+      if (v.brand_text) r.setProperty('--qp-text', v.brand_text);
+      if (v.brand_text_secondary) r.setProperty('--qp-text-secondary', v.brand_text_secondary);
+      if (v.brand_radius) r.setProperty('--qp-radius-lg', v.brand_radius);
+      if (v.brand_font) r.setProperty('--qp-font', v.brand_font);
+
+      // Watermark displaying
+      if (v.plan_id === 'free') {
+        document.getElementById('watermark').classList.remove('qp-hidden');
+      }
+
+      if (v.custom_css) {
+        const style = document.createElement('style');
+        style.textContent = v.custom_css;
+        document.head.appendChild(style);
+      }
+    }
+
+    // Mix color helper for Now Playing backing gradient
+    function colorMixDark(hex) {
+      // Shorthand convert
+      let c = hex.replace('#', '');
+      if (c.length === 3) c = c.split('').map(x => x + x).join('');
+      const r = parseInt(c.substring(0, 2), 16);
+      const g = parseInt(c.substring(2, 4), 16);
+      const b = parseInt(c.substring(4, 6), 16);
+      return `rgba(${Math.floor(r * 0.4)}, ${Math.floor(g * 0.4)}, ${Math.floor(b * 0.4)}, 0.4)`;
+    }
+
+    // Connect WebSocket
+    function connectWebSocket(venueId) {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}?venue=${venueId}`);
+
+      ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === 'init') {
+          updateQueue(message.queue);
+          updateNowPlaying(message.nowPlaying);
+        } else if (message.type === 'queue_updated') {
+          updateQueue(message.data.queue);
+        } else if (message.type === 'now_playing') {
+          updateNowPlaying(message.data);
+        }
+      };
+
+      ws.onclose = () => {
+        setTimeout(() => connectWebSocket(venueId), 3000);
+      };
+    }
+
+    function updateQueue(queue) {
+      document.getElementById('queueCount').textContent = `${queue.length} song${queue.length === 1 ? '' : 's'}`;
+      const list = document.getElementById('queueList');
+
+      if (queue.length === 0) {
+        list.innerHTML = `<div class="qp-text-center qp-text-muted qp-mt-md qp-text-sm">Queue is empty. Add a song to get started!</div>`;
+        return;
+      }
+
+      list.innerHTML = queue.map((song, idx) => {
+        const art = song.album_art || '/assets/music-placeholder.svg';
+        const nameBadge = song.guest_name ? `<span class="qp-badge qp-text-xs" style="margin-left:auto; background: rgba(255,255,255,0.06); color:#fff; border-color:transparent">${escapeHTML(song.guest_name)}</span>` : '';
+        return `
+          <div class="qp-song-row">
+            <div class="qp-queue-pos" style="color:rgba(255,255,255,0.6); background:transparent; font-size:0.9rem">${idx + 1}</div>
+            ${venue.show_album_art ? `<img class="qp-song-art" src="${art}" alt="art">` : ''}
+            <div class="qp-song-meta">
+              <div class="qp-song-title">${escapeHTML(song.title)}</div>
+              <div class="qp-song-artist">${escapeHTML(song.artist)}</div>
+            </div>
+            ${nameBadge}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function updateNowPlaying(song) {
+      const card = document.getElementById('nowPlayingCard');
+      if (!song) {
+        card.classList.add('qp-hidden');
+        return;
+      }
+
+      card.classList.remove('qp-hidden');
+      document.getElementById('nowPlayingTitle').textContent = song.title;
+      document.getElementById('nowPlayingArtist').textContent = song.artist;
+
+      const art = document.getElementById('nowPlayingArt');
+      if (venue.show_album_art && song.album_art) {
+        art.src = song.album_art;
+        art.style.display = 'block';
+      } else {
+        art.style.display = 'none';
+      }
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/[&<>'"]/g, 
+        tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+      );
+    }
+
+    // Search functionality with skeleton loading state
+    let searchTimeout = null;
+    const searchInput = document.getElementById('searchInput');
+    const searchResults = document.getElementById('searchResults');
+
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      const q = searchInput.value.trim();
+      if (!q) { 
+        searchResults.innerHTML = `
+          <div class="qp-text-center qp-text-muted qp-mt-md qp-text-sm" id="searchPlaceholderText">
+            Type above to discover Spotify tracks to play in this space.
+          </div>
+        `;
+        return; 
+      }
+
+      // Render skeleton loaders
+      renderSkeletons();
+
+      searchTimeout = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/venue/${slug}/search?q=${encodeURIComponent(q)}`);
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Search failed');
+
+          renderSearchResults(data.results);
+        } catch (err) {
+          showToast(err.message, 'error');
+          searchResults.innerHTML = `<div class="qp-text-center qp-text-muted qp-mt-md qp-text-sm">❌ Search failed. Check Spotify connections.</div>`;
+        }
+      }, 350);
+    });
+
+    function renderSkeletons() {
+      searchResults.innerHTML = Array(4).fill(0).map(() => `
+        <div class="skeleton-row">
+          <div class="skeleton-art qp-skeleton"></div>
+          <div>
+            <div class="skeleton-text-1 qp-skeleton"></div>
+            <div class="skeleton-text-2 qp-skeleton"></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderSearchResults(results) {
+      if (results.length === 0) {
+        searchResults.innerHTML = `<div class="qp-text-center qp-text-muted qp-mt-md qp-text-sm">No tracks found</div>`;
+        return;
+      }
+
+      searchResults.innerHTML = results.map(track => {
+        const art = track.albumArtSmall || '/assets/music-placeholder.svg';
+        return `
+          <div class="qp-song-row">
+            <img class="qp-song-art" src="${art}" alt="Art">
+            <div class="qp-song-meta">
+              <div class="qp-song-title">${escapeHTML(track.title)}</div>
+              <div class="qp-song-artist">${escapeHTML(track.artist)}</div>
+            </div>
+            <button class="add-song-btn" data-id="${track.id}">Add</button>
+          </div>
+        `;
+      }).join('');
+
+      document.querySelectorAll('.add-song-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const trackId = btn.dataset.id;
+          const guestName = document.getElementById('guestName').value.trim();
+          btn.disabled = true;
+          btn.textContent = 'Adding...';
+
+          try {
+            const res = await fetch(`/api/venue/${slug}/queue`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ songId: trackId, guestName })
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || data.error || 'Failed to add song');
+
+            showToast('✅ Song added to the queue!');
+            searchInput.value = '';
+            searchResults.innerHTML = `
+              <div class="qp-text-center qp-text-muted qp-mt-md qp-text-sm" id="searchPlaceholderText">
+                Type above to discover Spotify tracks to play in this space.
+              </div>
+            `;
+          } catch (err) {
+            showToast(err.message, 'error');
+            btn.disabled = false;
+            btn.textContent = 'Add';
+          }
+        });
+      });
+    }
+
+    // Load initial venue configuration
+    async function init() {
+      try {
+        const res = await fetch(`/api/venue/${slug}`);
+        if (!res.ok) throw new Error('Failed to load venue properties');
+        venue = await res.json();
+        applyBranding(venue);
+        connectWebSocket(venue.id);
+      } catch (err) {
+        console.error(err);
+        document.body.innerHTML = `
+          <div class="qp-container qp-text-center qp-mt-xl">
+            <h1 class="qp-h2">Venue Not Found</h1>
+            <p class="qp-text-secondary qp-mt-sm">Double check the URL or register your own coffeeshop at <a href="/" style="text-decoration:underline">QueuePlay</a>.</p>
+          </div>
+        `;
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

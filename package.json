@@ -1,29 +1,23 @@
 {
-  "name": "bar-jukebox",
-  "version": "1.0.0",
-  "description": "Production-ready music jukebox for bars and lounges with Spotify integration",
-  "main": "server.js",
+  "name": "queueplay",
+  "version": "2.0.0",
+  "description": "White-label SaaS music queue for cafes, restaurants, and public spaces. Guests scan a QR code, pick a song, and it plays through the venue's speakers.",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
-    "setup": "node setup.js"
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "db:reset": "rm -rf database/*.db && node src/server.js"
   },
-  "keywords": [
-    "jukebox",
-    "spotify",
-    "music",
-    "bar",
-    "lounge"
-  ],
-  "author": "",
+  "keywords": ["jukebox", "spotify", "music", "saas", "multi-tenant", "cafe", "restaurant"],
+  "author": "angellog",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
+    "better-sqlite3": "^11.7.0",
+    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "axios": "^1.6.2",
-    "sqlite3": "^5.1.7",
-    "cookie-parser": "^1.4.6",
+    "express": "^4.18.2",
+    "qrcode": "^1.5.4",
     "uuid": "^9.0.1",
     "ws": "^8.16.0"
   },
@@ -31,6 +25,6 @@
     "nodemon": "^3.0.2"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": "20.x"
   }
 }

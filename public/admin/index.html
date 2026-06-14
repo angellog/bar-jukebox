@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Venue Admin Dashboard</title>
+  <link rel="stylesheet" href="/assets/design-system.css">
+  <style>
+    .admin-layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+    @media (min-width: 992px) {
+      .admin-layout {
+        grid-template-columns: 280px 1fr;
+      }
+    }
+    .admin-nav {
+      display: flex;
+      flex-direction: row;
+      gap: 0.5rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+    @media (min-width: 992px) {
+      .admin-nav {
+        flex-direction: column;
+        overflow-x: visible;
+      }
+    }
+    .admin-nav-item {
+      padding: 0.75rem 1rem;
+      border-radius: var(--qp-radius-md);
+      background: var(--qp-glass);
+      color: var(--qp-text-secondary);
+      font-weight: 500;
+      cursor: pointer;
+      text-align: left;
+      white-space: nowrap;
+      transition: all var(--qp-transition);
+    }
+    .admin-nav-item.active {
+      background: var(--qp-primary);
+      color: #fff;
+    }
+    .admin-panel {
+      display: none;
+    }
+    .admin-panel.active {
+      display: block;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .qr-box {
+      text-align: center;
+      padding: 1.5rem;
+    }
+    .qr-img {
+      max-width: 200px;
+      margin: 0 auto 1rem;
+      border-radius: var(--qp-radius-md);
+      border: 4px solid #fff;
+    }
+    .color-picker-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .color-picker-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .color-picker-item input {
+      height: 40px;
+      padding: 2px;
+      border-radius: var(--qp-radius-sm);
+      border: 1px solid var(--qp-glass-border);
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <!-- LOGIN PAGE -->
+  <div id="loginSection" class="qp-container-sm qp-mt-xl">
+    <div class="qp-card">
+      <h1 class="qp-h3 qp-text-center qp-mb-md">🔑 Venue Log In</h1>
+      <form id="loginForm">
+        <div class="qp-mb-md">
+          <label class="qp-label">Admin password</label>
+          <input type="password" id="adminPassword" class="qp-input" placeholder="Enter dashboard password" required>
+        </div>
+        <div id="loginError" class="qp-text-danger qp-text-xs qp-mb-md qp-hidden" style="color:#f87171">Invalid password. Try again.</div>
+        <button type="submit" class="qp-btn qp-btn-primary qp-w-full">Open Dashboard</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MAIN DASHBOARD -->
+  <div id="dashboardSection" class="qp-container-lg qp-hidden">
+    <div class="qp-flex qp-items-center qp-justify-between qp-mt-lg">
+      <div>
+        <h1 class="qp-h2" id="dashVenueName">Dashboard</h1>
+        <p class="qp-text-secondary qp-text-sm">Manage queue, look & feel, settings, and music streams.</p>
+      </div>
+      <button id="logoutBtn" class="qp-btn qp-btn-secondary qp-btn-sm">Log Out</button>
+    </div>
+
+    <div class="admin-layout">
+      <!-- SIDEBAR -->
+      <aside class="admin-nav" id="sidebar">
+        <div class="admin-nav-item active" data-target="overview">📈 Overview</div>
+        <div class="admin-nav-item" data-target="queue">🎵 Queue & Controls</div>
+        <div class="admin-nav-item" data-target="branding">🎨 Brand Identity</div>
+        <div class="admin-nav-item" data-target="config">⚙️ Settings</div>
+        <div class="admin-nav-item" data-target="spotify">🔊 Spotify Setup</div>
+        <div class="admin-nav-item" data-target="qr">📱 Branded QR Code</div>
+      </aside>
+
+      <!-- PANELS -->
+      <main class="qp-card">
+        <!-- OVERVIEW -->
+        <section class="admin-panel active" id="panel-overview">
+          <h2 class="qp-h3 qp-mb-lg">Active Performance</h2>
+          <div class="stats-grid">
+            <div class="qp-stat">
+              <div class="qp-stat-value" id="statQueue">0</div>
+              <div class="qp-stat-label">In Queue</div>
+            </div>
+            <div class="qp-stat">
+              <div class="qp-stat-value" id="statToday">0</div>
+              <div class="qp-stat-label">Played Today</div>
+            </div>
+            <div class="qp-stat">
+              <div class="qp-stat-value" id="statTotal">0</div>
+              <div class="qp-stat-label">Total Played</div>
+            </div>
+            <div class="qp-stat">
+              <div class="qp-stat-value" id="statGuests">0</div>
+              <div class="qp-stat-label">Total Guests</div>
+            </div>
+          </div>
+
+          <h3 class="qp-h3 qp-mb-md qp-mt-lg">Most Active Requests</h3>
+          <div class="qp-flex qp-flex-col qp-gap-sm" id="topSongsList">
+            <!-- Loaded dynamically -->
+          </div>
+        </section>
+
+        <!-- QUEUE CONTROL -->
+        <section class="admin-panel" id="panel-queue">
+          <h2 class="qp-h3 qp-mb-md">Current Music Stream</h2>
+          
+          <div class="qp-flex qp-gap-sm qp-mb-lg">
+            <button id="skipBtn" class="qp-btn qp-btn-primary">⏭️ Skip Current</button>
+            <button id="clearQueueBtn" class="qp-btn qp-btn-secondary">🗑️ Clear Queue</button>
+            <button id="resetLimitsBtn" class="qp-btn qp-btn-secondary">⏱️ Reset Guest Cooldowns</button>
+          </div>
+
+          <h3 class="qp-h3 qp-mb-md">Pending Requests</h3>
+          <div class="qp-flex qp-flex-col qp-gap-sm" id="adminQueueList">
+            <!-- Loaded dynamically -->
+          </div>
+        </section>
+
+        <!-- BRANDING EDITOR -->
+        <section class="admin-panel" id="panel-branding">
+          <h2 class="qp-h3 qp-mb-sm">Brand Customization</h2>
+          <p class="qp-text-secondary qp-text-sm qp-mb-lg">Define how the music request page looks for customers when they scan the QR code.</p>
+
+          <form id="brandingForm">
+            <div class="qp-grid" style="grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem">
+              <div>
+                <label class="qp-label">Title / Label</label>
+                <input type="text" id="brandPageTitle" class="qp-input" placeholder="Cloud Nine Cafe Jukebox">
+              </div>
+              <div>
+                <label class="qp-label">Logo Image URL</label>
+                <input type="url" id="brandLogoUrl" class="qp-input" placeholder="https://example.com/logo.png">
+              </div>
+            </div>
+
+            <div class="qp-mb-md">
+              <label class="qp-label">Welcome Message / Guest instruction</label>
+              <input type="text" id="brandWelcomeMessage" class="qp-input" placeholder="Pick a song to play in our garden!">
+            </div>
+
+            <h3 class="qp-h3 qp-mt-lg">Color Theme</h3>
+            <div class="color-picker-row">
+              <div class="color-picker-item">
+                <span class="qp-label">Primary Color</span>
+                <input type="color" id="colorPrimary" value="#8b5cf6">
+              </div>
+              <div class="color-picker-item">
+                <span class="qp-label">Secondary Color</span>
+                <input type="color" id="colorSecondary" value="#ec4899">
+              </div>
+              <div class="color-picker-item">
+                <span class="qp-label">Background Dark</span>
+                <input type="color" id="colorBgDark" value="#0d0d14">
+              </div>
+              <div class="color-picker-item">
+                <span class="qp-label">Text Color</span>
+                <input type="color" id="colorText" value="#fafafa">
+              </div>
+            </div>
+
+            <div class="qp-grid qp-mt-lg" style="grid-template-columns:1fr 1fr; gap:1rem">
+              <div>
+                <label class="qp-label">Corner Radius</label>
+                <select id="brandRadius" class="qp-select">
+                  <option value="4px">Square (4px)</option>
+                  <option value="8px">Soft (8px)</option>
+                  <option value="12px" selected>Classic (12px)</option>
+                  <option value="20px">Rounded (20px)</option>
+                </select>
+              </div>
+              <div>
+                <label class="qp-label font-select">Typography / Font</label>
+                <select id="brandFont" class="qp-select">
+                  <option value="Outfit">Outfit (Vibrant)</option>
+                  <option value="Inter">Inter (Clean)</option>
+                  <option value="system-ui">System Default</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="qp-mb-lg qp-mt-md">
+              <label class="qp-label">Custom CSS overrides</label>
+              <textarea id="brandCustomCss" class="qp-input" rows="4" style="font-family:monospace" placeholder=".qp-song-row { border-color: red; }"></textarea>
+            </div>
+
+            <button type="submit" class="qp-btn qp-btn-primary">Save Branding</button>
+          </form>
+        </section>
+
+        <!-- CONFIG -->
+        <section class="admin-panel" id="panel-config">
+          <h2 class="qp-h3 qp-mb-lg">System Rules & Limits</h2>
+
+          <form id="configForm">
+            <div class="qp-grid" style="grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem">
+              <div>
+                <label class="qp-label">Guest request cooldown (minutes)</label>
+                <input type="number" id="configRateLimit" class="qp-input" min="1" max="60" required>
+              </div>
+              <div>
+                <label class="qp-label">Max songs per day per guest</label>
+                <input type="number" id="configSongsPerGuest" class="qp-input" min="1" max="20" required>
+              </div>
+            </div>
+
+            <div class="qp-grid" style="grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem">
+              <div>
+                <label class="qp-label">Max queue length</label>
+                <input type="number" id="configMaxQueue" class="qp-input" min="5" max="100" required>
+              </div>
+              <div>
+                <label class="qp-label">Explicit Tracks</label>
+                <select id="configAllowExplicit" class="qp-select">
+                  <option value="1">Allow explicit songs</option>
+                  <option value="0">Block explicit content</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="submit" class="qp-btn qp-btn-primary">Save Configuration</button>
+          </form>
+        </section>
+
+        <!-- SPOTIFY LINK -->
+        <section class="admin-panel" id="panel-spotify">
+          <h2 class="qp-h3 qp-mb-sm">Spotify Account Connection</h2>
+          <p class="qp-text-secondary qp-text-sm qp-mb-lg">Spotify Premium is required on your media device to stream music in full.</p>
+
+          <div id="spotifyStatusBox" class="qp-card qp-mb-lg">
+            <!-- Connected details loaded dynamically -->
+          </div>
+
+          <a id="connectSpotifyBtn" href="#" class="qp-btn qp-btn-primary">🔗 Connect Spotify Account</a>
+        </section>
+
+        <!-- QR CODE -->
+        <section class="admin-panel" id="panel-qr">
+          <h2 class="qp-h3 qp-mb-sm">Printable QR Entry</h2>
+          <p class="qp-text-secondary qp-text-sm qp-mb-lg">Display this QR code at your shop tables, counter, or menu. Customers scan to request music.</p>
+
+          <div class="qr-box qp-card">
+            <img id="qrCodeImg" class="qr-img" src="" alt="QR Code">
+            <div>
+              <p class="qp-text-secondary qp-text-sm" id="qrCodeUrlDisplay"></p>
+              <div class="qp-flex qp-gap-sm qp-justify-center qp-mt-md">
+                <button id="downloadQrBtn" class="qp-btn qp-btn-primary qp-btn-sm">💾 Download Image</button>
+                <button id="copyUrlBtn" class="qp-btn qp-btn-secondary qp-btn-sm">📋 Copy Link</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div class="qp-toast-container" id="toastContainer"></div>
+
+  <script>
+    const slug = window.location.pathname.split('/').pop();
+    let adminKey = localStorage.getItem(`qp_admin_key_${slug}`);
+    let venue = null;
+
+    // Toast manager
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `qp-toast qp-toast-${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.animation = 'qp-toast-out 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // Toggle panels
+    document.querySelectorAll('.admin-nav-item').forEach(item => {
+      item.addEventListener('click', () => {
+        document.querySelectorAll('.admin-nav-item').forEach(i => i.classList.remove('active'));
+        document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+
+        item.classList.add('active');
+        document.getElementById(`panel-${item.dataset.target}`).classList.add('active');
+      });
+    });
+
+    // Login Form
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pw = document.getElementById('adminPassword').value;
+
+      try {
+        const res = await fetch(`/api/venue/${slug}/admin/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pw })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+
+        adminKey = data.adminKey;
+        localStorage.setItem(`qp_admin_key_${slug}`, adminKey);
+        initDashboard();
+      } catch (err) {
+        const errBox = document.getElementById('loginError');
+        errBox.textContent = err.message;
+        errBox.classList.remove('qp-hidden');
+      }
+    });
+
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      localStorage.removeItem(`qp_admin_key_${slug}`);
+      location.reload();
+    });
+
+    // Skip
+    document.getElementById('skipBtn').addEventListener('click', async () => {
+      try {
+        const res = await fetch(`/api/venue/${slug}/play-next?admin_key=${adminKey}`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        showToast('skipped track');
+        loadQueue();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    // Clear
+    document.getElementById('clearQueueBtn').addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to clear the entire queue?')) return;
+      try {
+        const res = await fetch(`/api/venue/${slug}/admin/clear-queue?admin_key=${adminKey}`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        showToast('Queue cleared');
+        loadQueue();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    // Reset Cooldowns
+    document.getElementById('resetLimitsBtn').addEventListener('click', async () => {
+      try {
+        const res = await fetch(`/api/venue/${slug}/admin/reset-limits?admin_key=${adminKey}`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        showToast('Guest request cooldowns reset');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    // Edit branding
+    document.getElementById('brandingForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        page_title: document.getElementById('brandPageTitle').value,
+        logo_url: document.getElementById('brandLogoUrl').value,
+        welcome_message: document.getElementById('brandWelcomeMessage').value,
+        brand_primary: document.getElementById('colorPrimary').value,
+        brand_secondary: document.getElementById('colorSecondary').value,
+        brand_bg_dark: document.getElementById('colorBgDark').value,
+        brand_text: document.getElementById('colorText').value,
+        brand_radius: document.getElementById('brandRadius').value,
+        brand_font: document.getElementById('brandFont').value,
+        custom_css: document.getElementById('brandCustomCss').value
+      };
+
+      try {
+        const res = await fetch(`/api/venue/${slug}/admin/branding?admin_key=${adminKey}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        showToast('Branding settings saved successfully');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    // Edit limits config
+    document.getElementById('configForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        rate_limit_minutes: parseInt(document.getElementById('configRateLimit').value),
+        songs_per_guest: parseInt(document.getElementById('configSongsPerGuest').value),
+        max_queue_size: parseInt(document.getElementById('configMaxQueue').value),
+        allow_explicit: parseInt(document.getElementById('configAllowExplicit').value)
+      };
+
+      try {
+        const res = await fetch(`/api/venue/${slug}/admin/config?admin_key=${adminKey}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        showToast('Configuration rules saved successfully');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    async function loadStats() {
+      try {
+        const res = await fetch(`/api/venue/${slug}/admin/stats?admin_key=${adminKey}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+
+        document.getElementById('statQueue').textContent = data.queueCount;
+        document.getElementById('statTotal').textContent = data.totalPlayed;
+        document.getElementById('statToday').textContent = data.todayPlayed;
+        document.getElementById('statGuests').textContent = data.activeGuests;
+
+        const list = document.getElementById('topSongsList');
+        if (data.topSongs.length === 0) {
+          list.innerHTML = `<p class="qp-text-center qp-text-muted qp-text-xs">No playback history yet.</p>`;
+          return;
+        }
+
+        list.innerHTML = data.topSongs.map((song, idx) => `
+          <div class="qp-song-row">
+            <div class="qp-queue-pos">${idx + 1}</div>
+            <div class="qp-song-meta">
+              <div class="qp-song-title">${escapeHTML(song.title)}</div>
+              <div class="qp-song-artist">${escapeHTML(song.artist)}</div>
+            </div>
+            <span class="qp-badge qp-badge-success" style="margin-left:auto">${song.play_count} plays</span>
+          </div>
+        `).join('');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function loadQueue() {
+      try {
+        const res = await fetch(`/api/venue/${slug}/queue`);
+        const { queue } = await res.json();
+        const list = document.getElementById('adminQueueList');
+
+        if (queue.length === 0) {
+          list.innerHTML = `<p class="qp-text-center qp-text-muted qp-text-sm qp-mt-md">Queue is empty.</p>`;
+          return;
+        }
+
+        list.innerHTML = queue.map((song, idx) => `
+          <div class="qp-song-row">
+            <div class="qp-queue-pos">${idx + 1}</div>
+            <div class="qp-song-meta">
+              <div class="qp-song-title">${escapeHTML(song.title)}</div>
+              <div class="qp-song-artist">${escapeHTML(song.artist)}</div>
+            </div>
+            <button class="qp-btn qp-btn-secondary qp-btn-sm remove-item-btn" data-id="${song.id}" style="margin-left:auto; color:#f87171">Remove</button>
+          </div>
+        `).join('');
+
+        document.querySelectorAll('.remove-item-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            try {
+              const res = await fetch(`/api/venue/${slug}/queue/${btn.dataset.id}?admin_key=${adminKey}`, { method: 'DELETE' });
+              if (!res.ok) throw new Error('Failed to remove item');
+              showToast('Song removed from queue');
+              loadQueue();
+            } catch (err) {
+              showToast(err.message, 'error');
+            }
+          });
+        });
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function loadBrandingAndConfig() {
+      try {
+        const res = await fetch(`/api/venue/${slug}/admin/full?admin_key=${adminKey}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+
+        venue = data.venue;
+        document.getElementById('dashVenueName').textContent = venue.name;
+
+        // Branding
+        document.getElementById('brandPageTitle').value = venue.page_title || '';
+        document.getElementById('brandLogoUrl').value = venue.logo_url || '';
+        document.getElementById('brandWelcomeMessage').value = venue.welcome_message || '';
+        document.getElementById('colorPrimary').value = venue.brand_primary || '#8b5cf6';
+        document.getElementById('colorSecondary').value = venue.brand_secondary || '#ec4899';
+        document.getElementById('colorBgDark').value = venue.brand_bg_dark || '#0d0d14';
+        document.getElementById('colorText').value = venue.brand_text || '#fafafa';
+        document.getElementById('brandRadius').value = venue.brand_radius || '12px';
+        document.getElementById('brandFont').value = venue.brand_font || 'Outfit';
+        document.getElementById('brandCustomCss').value = venue.custom_css || '';
+
+        // Rules config
+        document.getElementById('configRateLimit').value = venue.rate_limit_minutes || 5;
+        document.getElementById('configSongsPerGuest').value = venue.songs_per_guest || 1;
+        document.getElementById('configMaxQueue').value = venue.max_queue_size || 20;
+        document.getElementById('configAllowExplicit').value = venue.allow_explicit;
+
+        // Spotify status
+        const spBox = document.getElementById('spotifyStatusBox');
+        if (venue.spotify_connected) {
+          spBox.innerHTML = `
+            <div class="qp-flex qp-items-center qp-gap-md">
+              <span style="font-size:2.2rem">&#x2705;</span>
+              <div>
+                <h4 style="font-weight:600">Spotify connected</h4>
+                <p class="qp-text-secondary qp-text-sm">Ready to play full songs on your browser player.</p>
+              </div>
+            </div>
+          `;
+          document.getElementById('connectSpotifyBtn').textContent = '🔄 Reconnect Spotify Account';
+        } else {
+          spBox.innerHTML = `
+            <div class="qp-flex qp-items-center qp-gap-md">
+              <span style="font-size:2.2rem">&#x274C;</span>
+              <div>
+                <h4 style="font-weight:600">Spotify not connected</h4>
+                <p class="qp-text-secondary qp-text-sm">You must link a Spotify Premium account to get full audio streams.</p>
+              </div>
+            </div>
+          `;
+        }
+
+        document.getElementById('connectSpotifyBtn').href = `/auth/spotify/connect/${slug}`;
+
+        // QR Code details
+        const qrRes = await fetch(`/api/venue/${slug}/qr`);
+        const qrData = await qrRes.json();
+        document.getElementById('qrCodeImg').src = qrData.qr;
+        document.getElementById('qrCodeUrlDisplay').innerHTML = `Public Guest URL:<br><a href="${qrData.url}" target="_blank" style="text-decoration:underline; font-family:monospace">${qrData.url}</a>`;
+
+        document.getElementById('downloadQrBtn').onclick = () => {
+          const a = document.createElement('a');
+          a.href = qrData.qr;
+          a.download = `qp-qr-${slug}.png`;
+          a.click();
+        };
+
+        document.getElementById('copyUrlBtn').onclick = () => {
+          navigator.clipboard.writeText(qrData.url);
+          showToast('Guest link copied to clipboard!');
+        };
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/[&<>'"]/g, 
+        tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+      );
+    }
+
+    async function initDashboard() {
+      document.getElementById('loginSection').classList.add('qp-hidden');
+      document.getElementById('dashboardSection').classList.remove('qp-hidden');
+      await loadBrandingAndConfig();
+      await loadStats();
+      await loadQueue();
+
+      // Refresh stats regularly
+      setInterval(() => {
+        loadStats();
+        loadQueue();
+      }, 10000);
+    }
+
+    // Check auth
+    if (adminKey) {
+      initDashboard();
+    }
+  </script>
+</body>
+</html>

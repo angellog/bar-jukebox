@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Music player - Venue Audio Stream</title>
+  <link rel="stylesheet" href="/assets/design-system.css">
+  <style>
+    .player-container {
+      max-width: 600px;
+      margin: 4rem auto;
+      text-align: center;
+    }
+    .player-card {
+      padding: 3rem 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .player-art-lg {
+      width: 240px;
+      height: 240px;
+      border-radius: var(--qp-radius-lg);
+      margin: 0 auto 2rem;
+      object-fit: cover;
+      box-shadow: var(--qp-shadow-lg), var(--qp-shadow-glow);
+    }
+    .player-controls {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      align-items: center;
+      margin-top: 2rem;
+    }
+    .device-status {
+      margin-top: 1.5rem;
+      font-size: 0.8rem;
+      color: var(--qp-text-muted);
+    }
+  </style>
+</head>
+<body>
+  <!-- AUTHORIZE GATE -->
+  <div id="authGate" class="qp-container-sm qp-mt-xl">
+    <div class="qp-card">
+      <h1 class="qp-h3 qp-text-center qp-mb-md">🔑 Owner Verification</h1>
+      <form id="authForm">
+        <div class="qp-mb-md">
+          <label class="qp-label">Admin key</label>
+          <input type="password" id="adminKeyInput" class="qp-input" placeholder="Enter venue admin key" required>
+        </div>
+        <button type="submit" class="qp-btn qp-btn-primary qp-w-full">Initialize Audio Player</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MAIN PLAYER -->
+  <div id="playerSection" class="qp-container qp-hidden">
+    <div class="player-container">
+      <div class="qp-card player-card">
+        <div class="qp-np-label">Active Jukebox Stream</div>
+        
+        <img id="nowPlayingArt" class="player-art-lg qp-mt-md" src="/assets/music-placeholder.svg" alt="Album Art">
+        
+        <h2 class="qp-h2 qp-mt-md" id="nowPlayingTitle">Nothing Playing</h2>
+        <p class="qp-text-secondary qp-mt-xs" id="nowPlayingArtist" style="font-size:1.2rem">-</p>
+
+        <!-- Progress -->
+        <div class="qp-progress-container qp-mt-lg" style="margin-top:2rem">
+          <div class="qp-progress" id="progressBar">
+            <div class="qp-progress-fill" id="progressFill"></div>
+          </div>
+          <div class="qp-progress-times">
+            <span id="timeCurrent">0:00</span>
+            <span id="timeTotal">0:00</span>
+          </div>
+        </div>
+
+        <!-- Player Controls -->
+        <div class="player-controls">
+          <button id="playBtn" class="qp-btn qp-btn-primary qp-btn-icon-lg">▶️</button>
+          <button id="skipBtn" class="qp-btn qp-btn-secondary qp-btn-icon-lg">⏭️</button>
+        </div>
+
+        <div class="device-status" id="spotifyStatusText">
+          Initializing audio drivers...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="qp-toast-container" id="toastContainer"></div>
+
+  <!-- Spotify Web Playback SDK -->
+  <script src="https://sdk.scdn.co/spotify-player.js"></script>
+  <script>
+    const slug = window.location.pathname.split('/').pop();
+    let adminKey = localStorage.getItem(`qp_player_key_${slug}`);
+    let spotifyPlayer = null;
+    let deviceId = null;
+    let nowPlaying = null;
+    let ws = null;
+    let progressInterval = null;
+    let trackProgressMs = 0;
+    let trackDurationMs = 0;
+    let isPlaying = false;
+
+    // Toast manager
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `qp-toast qp-toast-${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.animation = 'qp-toast-out 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // Gate password entry
+    document.getElementById('authForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      adminKey = document.getElementById('adminKeyInput').value;
+      localStorage.setItem(`qp_player_key_${slug}`, adminKey);
+      initPlayer();
+    });
+
+    // Toggle Play/Pause
+    document.getElementById('playBtn').addEventListener('click', () => {
+      if (!spotifyPlayer) return;
+      spotifyPlayer.togglePlay().then(() => {
+        isPlaying = !isPlaying;
+        document.getElementById('playBtn').textContent = isPlaying ? '⏸️' : '▶️';
+      });
+    });
+
+    // Skip song
+    document.getElementById('skipBtn').addEventListener('click', async () => {
+      try {
+        const res = await fetch(`/api/venue/${slug}/play-next?admin_key=${adminKey}`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        showToast('skipped track');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    // Get Spotify Access Token
+    async function getSpotifyToken() {
+      const res = await fetch(`/api/venue/${slug}/spotify-token?admin_key=${adminKey}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      return data.token;
+    }
+
+    // Initialize Spotify Web Playback SDK
+    window.onSpotifyWebPlaybackSDKReady = () => {
+      if (adminKey) initPlayer();
+    };
+
+    async function initPlayer() {
+      document.getElementById('authGate').classList.add('qp-hidden');
+      document.getElementById('playerSection').classList.remove('qp-hidden');
+
+      try {
+        const token = await getSpotifyToken();
+
+        spotifyPlayer = new Spotify.Player({
+          name: `QueuePlay Jukebox (${slug})`,
+          getOAuthToken: cb => { cb(token); },
+          volume: 0.8
+        });
+
+        // Error handling
+        spotifyPlayer.addListener('initialization_error', ({ message }) => { showToast(message, 'error'); });
+        spotifyPlayer.addListener('authentication_error', ({ message }) => { showToast('Spotify Auth Expired. Please refresh page or reconnect Spotify.', 'error'); });
+        spotifyPlayer.addListener('account_error', ({ message }) => { showToast('Premium Spotify Account Required.', 'error'); });
+        spotifyPlayer.addListener('playback_error', ({ message }) => { showToast(message, 'error'); });
+
+        // Playback status updates
+        spotifyPlayer.addListener('player_state_changed', state => {
+          if (!state) return;
+          isPlaying = !state.paused;
+          document.getElementById('playBtn').textContent = isPlaying ? '⏸️' : '▶️';
+
+          trackProgressMs = state.position;
+          trackDurationMs = state.duration;
+          updateProgressUI();
+
+          if (isPlaying) {
+            startProgressTicker();
+          } else {
+            clearInterval(progressInterval);
+          }
+
+          // Trigger next track if near ending
+          if (state.position === 0 && state.paused && state.restrictions.disallow_resuming_reasons) {
+            playNextQueueItem();
+          }
+        });
+
+        // Ready
+        spotifyPlayer.addListener('ready', ({ device_id }) => {
+          deviceId = device_id;
+          document.getElementById('spotifyStatusText').innerHTML = `🟢 Audio stream active. Device: <strong>QueuePlay Player (${slug})</strong>`;
+          connectWebSocket();
+        });
+
+        // Not Ready
+        spotifyPlayer.addListener('not_ready', ({ device_id }) => {
+          document.getElementById('spotifyStatusText').textContent = '🔴 Player inactive.';
+        });
+
+        // Connect to the player!
+        spotifyPlayer.connect();
+      } catch (err) {
+        showToast(err.message, 'error');
+        document.getElementById('authGate').classList.remove('qp-hidden');
+        document.getElementById('playerSection').classList.add('qp-hidden');
+      }
+    }
+
+    function startProgressTicker() {
+      clearInterval(progressInterval);
+      progressInterval = setInterval(() => {
+        if (!isPlaying) return;
+        trackProgressMs += 1000;
+        if (trackProgressMs >= trackDurationMs) {
+          clearInterval(progressInterval);
+          playNextQueueItem();
+        }
+        updateProgressUI();
+      }, 1000);
+    }
+
+    function updateProgressUI() {
+      const percentage = (trackProgressMs / trackDurationMs) * 100;
+      document.getElementById('progressFill').style.width = `${Math.min(percentage, 100)}%`;
+      document.getElementById('timeCurrent').textContent = formatTime(trackProgressMs / 1000);
+      document.getElementById('timeTotal').textContent = formatTime(trackDurationMs / 1000);
+    }
+
+    function formatTime(seconds) {
+      if (!isFinite(seconds) || isNaN(seconds)) return '0:00';
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    // Connect WebSocket
+    function connectWebSocket() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}?venue=${slug}`);
+
+      ws.onmessage = async (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === 'init') {
+          syncPlayback(message.nowPlaying);
+        } else if (message.type === 'now_playing') {
+          syncPlayback(message.data);
+        }
+      };
+
+      ws.onclose = () => {
+        setTimeout(connectWebSocket, 3000);
+      };
+    }
+
+    async function syncPlayback(song) {
+      nowPlaying = song;
+
+      if (!song) {
+        document.getElementById('nowPlayingTitle').textContent = 'Nothing Playing';
+        document.getElementById('nowPlayingArtist').textContent = '-';
+        document.getElementById('nowPlayingArt').src = '/assets/music-placeholder.svg';
+        trackProgressMs = 0;
+        trackDurationMs = 0;
+        updateProgressUI();
+        return;
+      }
+
+      document.getElementById('nowPlayingTitle').textContent = song.title;
+      document.getElementById('nowPlayingArtist').textContent = song.artist;
+      document.getElementById('nowPlayingArt').src = song.album_art || '/assets/music-placeholder.svg';
+
+      // Remote control Spotify player
+      try {
+        const token = await getSpotifyToken();
+        const uri = song.spotify_uri || `spotify:track:${song.song_id}`;
+        
+        await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ uris: [uri] })
+        });
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function playNextQueueItem() {
+      try {
+        const res = await fetch(`/api/venue/${slug}/play-next?admin_key=${adminKey}`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    // Check pre-saved token
+    if (adminKey) {
+      document.getElementById('authGate').classList.add('qp-hidden');
+    }
+  </script>
+</body>
+</html>
