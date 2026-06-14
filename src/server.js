@@ -431,16 +431,18 @@ app.get('/api/venue/:venueSlug/admin/full', resolveVenue, venueAdminAuth, (req, 
 // ============================================
 
 app.get('/auth/spotify/connect/:venueSlug', resolveVenue, (req, res) => {
-  if (!process.env.SPOTIFY_CLIENT_ID || process.env.SPOTIFY_CLIENT_ID === 'spotify_client_id_placeholder' || !process.env.SPOTIFY_CLIENT_SECRET || process.env.SPOTIFY_CLIENT_SECRET === 'spotify_client_secret_placeholder') {
+  if (!process.env.SPOTIFY_CLIENT_ID || !process.env.SPOTIFY_CLIENT_SECRET) {
     return res.send(`
       <div style="font-family: sans-serif; max-width: 500px; margin: 5rem auto; padding: 2rem; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); background-color: #121212; color: #fff;">
-        <h2 style="color: #f43f5e; margin-bottom: 1rem;">Spotify Credentials Missing</h2>
-        <p style="color: #bfbfbf; line-height: 1.5;">This QueuePlay server does not have Spotify Developer Credentials configured yet.</p>
-        <p style="color: #bfbfbf;"><strong>To set it up:</strong></p>
+        <h2 style="color: #f43f5e; margin-bottom: 1rem;">QueuePlay Spotify Credentials Not Configured</h2>
+        <p style="color: #bfbfbf; line-height: 1.5;">The QueuePlay platform owner has not configured Spotify credentials yet.</p>
+        <p style="color: #bfbfbf; line-height: 1.5;">These are QueuePlay's own Developer App credentials — venues just click "Connect" using their personal Spotify account.</p>
+        <p style="color: #bfbfbf;"><strong>To fix this (platform owner):</strong></p>
         <ol style="color: #bfbfbf; padding-left: 1.25rem; line-height: 1.8;">
-          <li>Create an app on the <a href="https://developer.spotify.com/dashboard" target="_blank" style="color: #a78bfa; text-decoration: underline;">Spotify Developer Dashboard</a></li>
-          <li>Set the Redirect URI to: <br><code style="background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; font-family: monospace; display: inline-block; margin: 4px 0;">${BASE_URL}/auth/spotify/callback</code></li>
-          <li>Add the <code>SPOTIFY_CLIENT_ID</code> and <code>SPOTIFY_CLIENT_SECRET</code> variables on your Railway service dashboard.</li>
+          <li>Go to <a href="https://developer.spotify.com/dashboard" target="_blank" style="color: #a78bfa; text-decoration: underline;">Spotify Developer Dashboard</a></li>
+          <li>Create an app (or use an existing one) named "QueuePlay"</li>
+          <li>Add this Redirect URI: <br><code style="background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; font-family: monospace; display: inline-block; margin: 4px 0;">${BASE_URL}/auth/spotify/callback</code></li>
+          <li>Set <code>SPOTIFY_CLIENT_ID</code> and <code>SPOTIFY_CLIENT_SECRET</code> in Railway environment variables</li>
         </ol>
         <a href="/admin/${req.venue.slug}" style="display: inline-block; margin-top: 1.5rem; padding: 0.6rem 1.25rem; background: #8b5cf6; color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">Back to Dashboard</a>
       </div>
