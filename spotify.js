@@ -49,7 +49,7 @@ class SpotifyService {
     // SEARCH
     // ============================================
 
-    async search(query, limit = 20) {
+    async search(query, limit = 10) {
         try {
             const token = await this.getAccessToken();
 
