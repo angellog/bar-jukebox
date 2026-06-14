@@ -97,7 +97,7 @@ class JukeboxDatabase {
 
     addToQueue(song) {
         const maxPosition = this.db.prepare(
-            'SELECT MAX(position) as max FROM queue WHERE status = "pending"'
+            "SELECT MAX(position) as max FROM queue WHERE status = 'pending'"
         ).get();
 
         const position = (maxPosition.max || 0) + 1;
@@ -292,7 +292,7 @@ class JukeboxDatabase {
     }
 
     getStats() {
-        const queueCount = this.db.prepare('SELECT COUNT(*) as count FROM queue WHERE status = "pending"').get();
+        const queueCount = this.db.prepare("SELECT COUNT(*) as count FROM queue WHERE status = 'pending'").get();
         const totalPlayed = this.db.prepare('SELECT COUNT(*) as count FROM playback_history').get();
         const activeUsers = this.db.prepare('SELECT COUNT(*) as count FROM user_sessions').get();
 
