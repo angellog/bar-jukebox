@@ -42,12 +42,15 @@
   <!-- AUTHORIZE GATE -->
   <div id="authGate" class="qp-container-sm qp-mt-xl">
     <div class="qp-card">
-      <h1 class="qp-h3 qp-text-center qp-mb-md">🔑 Owner Verification</h1>
+      <h1 class="qp-h3 qp-text-center qp-mb-md">🎵 Venue Verification</h1>
       <form id="authForm">
         <div class="qp-mb-md">
-          <label class="qp-label">Admin key</label>
-          <input type="password" id="adminKeyInput" class="qp-input" placeholder="Enter venue admin key" required>
+          <label class="qp-label">Admin password</label>
+          <input type="password" id="passwordInput" class="qp-input" placeholder="Enter venue admin password" required>
         </div>
+        <p class="qp-text-muted qp-text-sm qp-mb-md" style="text-align:center">
+          Use the admin password you chose during registration.
+        </p>
         <button type="submit" class="qp-btn qp-btn-primary qp-w-full">Initialize Audio Player</button>
       </form>
     </div>
@@ -118,12 +121,29 @@
       }, 4000);
     }
 
-    // Gate password entry
-    document.getElementById('authForm').addEventListener('submit', (e) => {
+    // Gate password entry — use same login as admin dashboard
+    document.getElementById('authForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      adminKey = document.getElementById('adminKeyInput').value;
-      localStorage.setItem(`qp_player_key_${slug}`, adminKey);
-      initPlayer();
+      const password = document.getElementById('passwordInput').value;
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Authenticating...';
+      try {
+        const res = await fetch(`/api/venue/${slug}/admin/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Invalid password');
+        adminKey = data.adminKey;
+        localStorage.setItem(`qp_player_key_${slug}`, adminKey);
+        initPlayer();
+      } catch (err) {
+        showToast(err.message, 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Initialize Audio Player';
+      }
     });
 
     // Toggle Play/Pause
