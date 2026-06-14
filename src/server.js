@@ -286,8 +286,8 @@ app.post('/api/venue/:venueSlug/queue', resolveVenue, async (req, res) => {
     // Broadcast
     broadcastToVenue(venue.id, 'queue_updated', { queue: db.getQueue(venue.id) });
 
-    // Auto-play if nothing playing
-    if (venue.auto_play && !db.getNowPlaying(venue.id)) {
+    // Auto-play if nothing playing and Spotify is connected
+    if (venue.auto_play && venue.spotify_connected && !db.getNowPlaying(venue.id)) {
       const nextSong = db.playNext(venue.id);
       if (nextSong) {
         broadcastToVenue(venue.id, 'now_playing', nextSong);
@@ -461,6 +461,18 @@ app.get('/auth/spotify/callback', async (req, res) => {
     db.updateVenueSpotifyTokens(venueId, tokens);
 
     const venue = db.getVenueById(venueId);
+
+    // Auto-play first queued song after connecting Spotify
+    if (venue.auto_play) {
+      const current = db.getNowPlaying(venue.id);
+      if (!current) {
+        const nextSong = db.playNext(venue.id);
+        if (nextSong) {
+          broadcastToVenue(venue.id, 'now_playing', nextSong);
+        }
+      }
+    }
+
     res.redirect(`/admin/${venue.slug}?spotify=connected`);
   } catch (error) {
     console.error('[Spotify OAuth Error]', error.message);

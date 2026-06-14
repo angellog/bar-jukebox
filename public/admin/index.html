@@ -288,6 +288,14 @@
               </div>
             </div>
 
+            <div class="qp-mb-lg">
+              <label class="qp-label" style="display:flex; align-items:center; gap:.5rem; cursor:pointer">
+                <input type="checkbox" id="configAutoPlay" value="1" checked>
+                Auto-play songs when added to queue
+              </label>
+              <p class="qp-text-muted qp-text-xs qp-mt-xs">When enabled, the first song in the queue starts playing immediately if nothing is currently playing.</p>
+            </div>
+
             <button type="submit" class="qp-btn qp-btn-primary">Save Configuration</button>
           </form>
         </section>
@@ -475,7 +483,8 @@
         rate_limit_minutes: parseInt(document.getElementById('configRateLimit').value),
         songs_per_guest: parseInt(document.getElementById('configSongsPerGuest').value),
         max_queue_size: parseInt(document.getElementById('configMaxQueue').value),
-        allow_explicit: parseInt(document.getElementById('configAllowExplicit').value)
+        allow_explicit: parseInt(document.getElementById('configAllowExplicit').value),
+        auto_play: document.getElementById('configAutoPlay').checked ? 1 : 0
       };
 
       try {
@@ -623,6 +632,7 @@
         document.getElementById('configSongsPerGuest').value = venue.songs_per_guest || 1;
         document.getElementById('configMaxQueue').value = venue.max_queue_size || 20;
         document.getElementById('configAllowExplicit').value = venue.allow_explicit;
+        document.getElementById('configAutoPlay').checked = venue.auto_play !== 0;
 
         // Spotify status
         const spBox = document.getElementById('spotifyStatusBox');
