@@ -1,31 +1,18 @@
-// ============================================
-// QUEUEPLAY - MULTI-TENANT DATABASE
-// ============================================
-
-const Database = require('better-sqlite3');
-const path = require('path');
-const fs = require('fs');
+const { Pool } = require('pg');
 const { v4: uuidv4 } = require('uuid');
 
 class QueuePlayDB {
-  constructor(dbPath = './database/queueplay.db') {
-    const dbDir = path.dirname(dbPath);
-    if (!fs.existsSync(dbDir)) {
-      fs.mkdirSync(dbDir, { recursive: true });
-    }
-
-    this.db = new Database(dbPath);
-    this.db.pragma('journal_mode = WAL');
-    this.db.pragma('foreign_keys = ON');
-    this.initializeSchema();
-    this.seedSubscriptionPlans();
+  constructor(connectionString) {
+    this.pool = new Pool({
+      connectionString,
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
+    });
   }
 
-  initializeSchema() {
-    this.db.exec(`
-      -- ============================================
-      -- SUBSCRIPTION PLANS
-      -- ============================================
+  async initializeSchema() {
+    await this.pool.query(`
       CREATE TABLE IF NOT EXISTS subscription_plans (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -42,12 +29,9 @@ class QueuePlayDB {
         max_active_sessions INTEGER NOT NULL DEFAULT 20,
         description TEXT,
         features_json TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
-      -- ============================================
-      -- VENUES (tenants)
-      -- ============================================
       CREATE TABLE IF NOT EXISTS venues (
         id TEXT PRIMARY KEY,
         slug TEXT UNIQUE NOT NULL,
@@ -57,25 +41,17 @@ class QueuePlayDB {
         phone TEXT,
         address TEXT,
         timezone TEXT DEFAULT 'UTC',
-
-        -- Subscription
         plan_id TEXT NOT NULL DEFAULT 'free',
         subscription_status TEXT NOT NULL DEFAULT 'active',
-        subscription_started_at DATETIME,
-        subscription_expires_at DATETIME,
+        subscription_started_at TIMESTAMP,
+        subscription_expires_at TIMESTAMP,
         stripe_customer_id TEXT,
-
-        -- Spotify OAuth
         spotify_access_token TEXT,
         spotify_refresh_token TEXT,
-        spotify_token_expires_at DATETIME,
+        spotify_token_expires_at TIMESTAMP,
         spotify_connected INTEGER NOT NULL DEFAULT 0,
-
-        -- Admin auth
         admin_password_hash TEXT NOT NULL,
         admin_key TEXT NOT NULL,
-
-        -- Branding
         logo_url TEXT,
         brand_primary TEXT DEFAULT '#8b5cf6',
         brand_secondary TEXT DEFAULT '#ec4899',
@@ -89,8 +65,6 @@ class QueuePlayDB {
         welcome_message TEXT DEFAULT 'Search, add, and enjoy music together',
         page_title TEXT,
         custom_css TEXT,
-
-        -- Config
         rate_limit_minutes INTEGER DEFAULT 5,
         max_queue_size INTEGER DEFAULT 20,
         songs_per_guest INTEGER DEFAULT 1,
@@ -100,20 +74,14 @@ class QueuePlayDB {
         show_album_art INTEGER DEFAULT 1,
         genre_restrictions TEXT,
         blocked_songs TEXT,
-
-        -- Meta
         is_active INTEGER NOT NULL DEFAULT 1,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (plan_id) REFERENCES subscription_plans(id)
       );
 
-      -- ============================================
-      -- QUEUE
-      -- ============================================
       CREATE TABLE IF NOT EXISTS queue (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         venue_id TEXT NOT NULL,
         song_id TEXT NOT NULL,
         title TEXT NOT NULL,
@@ -127,14 +95,10 @@ class QueuePlayDB {
         guest_name TEXT,
         position INTEGER NOT NULL,
         status TEXT DEFAULT 'pending',
-        added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
+        added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (venue_id) REFERENCES venues(id)
       );
 
-      -- ============================================
-      -- NOW PLAYING (one per venue)
-      -- ============================================
       CREATE TABLE IF NOT EXISTS now_playing (
         venue_id TEXT PRIMARY KEY,
         song_id TEXT,
@@ -145,78 +109,59 @@ class QueuePlayDB {
         preview_url TEXT,
         spotify_uri TEXT,
         duration_ms INTEGER,
-        started_at DATETIME,
+        started_at TIMESTAMP,
         added_by TEXT,
-
         FOREIGN KEY (venue_id) REFERENCES venues(id)
       );
 
-      -- ============================================
-      -- GUEST SESSIONS (rate limiting)
-      -- ============================================
       CREATE TABLE IF NOT EXISTS guest_sessions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         venue_id TEXT NOT NULL,
         guest_id TEXT NOT NULL,
         ip_address TEXT,
-        last_request_at DATETIME,
+        last_request_at TIMESTAMP,
         request_count INTEGER DEFAULT 0,
         songs_today INTEGER DEFAULT 0,
         last_song_date TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(venue_id, guest_id),
         FOREIGN KEY (venue_id) REFERENCES venues(id)
       );
 
-      -- ============================================
-      -- PLAYBACK HISTORY
-      -- ============================================
       CREATE TABLE IF NOT EXISTS playback_history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         venue_id TEXT NOT NULL,
         song_id TEXT NOT NULL,
         title TEXT NOT NULL,
         artist TEXT NOT NULL,
         album TEXT,
-        played_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         added_by TEXT,
-
         FOREIGN KEY (venue_id) REFERENCES venues(id)
       );
 
-      -- ============================================
-      -- SUPER ADMIN
-      -- ============================================
       CREATE TABLE IF NOT EXISTS super_admins (
         id TEXT PRIMARY KEY,
         email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
         name TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
-      -- ============================================
-      -- INDEXES
-      -- ============================================
       CREATE INDEX IF NOT EXISTS idx_venues_slug ON venues(slug);
       CREATE INDEX IF NOT EXISTS idx_queue_venue ON queue(venue_id, status, position);
       CREATE INDEX IF NOT EXISTS idx_guest_sessions_venue ON guest_sessions(venue_id, guest_id);
       CREATE INDEX IF NOT EXISTS idx_history_venue ON playback_history(venue_id, played_at);
     `);
 
-    console.log('[DB] Schema initialized');
+    await this.seedSubscriptionPlans();
+    console.log('[DB] PostgreSQL schema initialized');
   }
 
-  seedSubscriptionPlans() {
-    const existing = this.db.prepare('SELECT COUNT(*) as count FROM subscription_plans').get();
-    if (existing.count > 0) return;
-
-    const insert = this.db.prepare(`
-      INSERT INTO subscription_plans (id, name, price_monthly, price_yearly, max_queue_size, max_songs_per_day, rate_limit_minutes, custom_branding, custom_domain, analytics, priority_support, remove_watermark, max_active_sessions, description, features_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+  async seedSubscriptionPlans() {
+    const { rows } = await this.pool.query('SELECT COUNT(*)::int as count FROM subscription_plans');
+    if (rows[0].count > 0) return;
 
     const plans = [
       ['free', 'Free', 0, 0, 10, 30, 10, 0, 0, 0, 0, 0, 10, 'Try QueuePlay with basic features', '["Up to 10 songs in queue","30 songs per day","10-min cooldown between requests","QueuePlay watermark","Basic support"]'],
@@ -225,64 +170,71 @@ class QueuePlayDB {
       ['enterprise', 'Enterprise', 99.99, 999, 200, 9999, 1, 1, 1, 1, 1, 1, 500, 'Multi-location chains and franchises', '["Unlimited queue size","Unlimited songs per day","1-min cooldown","Full white-label","Custom domain","Real-time analytics dashboard","Dedicated support","API access","Multi-venue management","Custom integrations"]']
     ];
 
-    const insertMany = this.db.transaction((plans) => {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
       for (const p of plans) {
-        insert.run(...p);
+        await client.query(
+          `INSERT INTO subscription_plans (id, name, price_monthly, price_yearly, max_queue_size, max_songs_per_day, rate_limit_minutes, custom_branding, custom_domain, analytics, priority_support, remove_watermark, max_active_sessions, description, features_json)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+          p
+        );
       }
-    });
-
-    insertMany(plans);
-    console.log('[DB] Subscription plans seeded');
+      await client.query('COMMIT');
+      console.log('[DB] Subscription plans seeded');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
   }
 
-  // ============================================
-  // VENUE OPERATIONS
-  // ============================================
-
-  createVenue(data) {
+  async createVenue(data) {
     const id = uuidv4();
     const slug = data.slug || data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const adminKey = uuidv4();
 
-    this.db.prepare(`
-      INSERT INTO venues (id, slug, name, type, email, phone, address, plan_id, admin_password_hash, admin_key, page_title, welcome_message)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id, slug, data.name, data.type || 'cafe',
-      data.email || null, data.phone || null, data.address || null,
-      data.plan_id || 'free',
-      data.password_hash,
-      adminKey,
-      data.name,
-      data.welcome_message || 'Search, add, and enjoy music together'
+    await this.pool.query(
+      `INSERT INTO venues (id, slug, name, type, email, phone, address, plan_id, admin_password_hash, admin_key, page_title, welcome_message)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [
+        id, slug, data.name, data.type || 'cafe',
+        data.email || null, data.phone || null, data.address || null,
+        data.plan_id || 'free',
+        data.password_hash,
+        adminKey,
+        data.name,
+        data.welcome_message || 'Search, add, and enjoy music together'
+      ]
     );
 
     return { id, slug, adminKey };
   }
 
-  getVenueBySlug(slug) {
-    return this.db.prepare('SELECT * FROM venues WHERE slug = ? AND is_active = 1').get(slug);
+  async getVenueBySlug(slug) {
+    const { rows } = await this.pool.query('SELECT * FROM venues WHERE slug = $1 AND is_active = 1', [slug]);
+    return rows[0] || null;
   }
 
-  getVenueById(id) {
-    return this.db.prepare('SELECT * FROM venues WHERE id = ?').get(id);
+  async getVenueById(id) {
+    const { rows } = await this.pool.query('SELECT * FROM venues WHERE id = $1', [id]);
+    return rows[0] || null;
   }
 
-  getAllVenues() {
-    return this.db.prepare(`
+  async getAllVenues() {
+    const { rows } = await this.pool.query(`
       SELECT v.*, sp.name as plan_name, sp.price_monthly,
         (SELECT COUNT(*) FROM playback_history WHERE venue_id = v.id) as total_played,
         (SELECT COUNT(*) FROM guest_sessions WHERE venue_id = v.id) as total_guests
       FROM venues v
       LEFT JOIN subscription_plans sp ON v.plan_id = sp.id
       ORDER BY v.created_at DESC
-    `).all();
+    `);
+    return rows;
   }
 
-  updateVenueBranding(venueId, branding) {
-    const fields = [];
-    const values = [];
-
+  async updateVenueBranding(venueId, branding) {
     const allowed = [
       'logo_url', 'brand_primary', 'brand_secondary', 'brand_accent',
       'brand_bg_dark', 'brand_bg_card', 'brand_text', 'brand_text_secondary',
@@ -290,228 +242,270 @@ class QueuePlayDB {
       'name', 'type'
     ];
 
+    const setClauses = [];
+    const values = [];
+    let idx = 1;
+
     for (const key of allowed) {
       if (branding[key] !== undefined) {
-        fields.push(`${key} = ?`);
+        setClauses.push(`${key} = $${idx++}`);
         values.push(branding[key]);
       }
     }
 
-    if (fields.length === 0) return false;
+    if (setClauses.length === 0) return false;
 
-    fields.push('updated_at = CURRENT_TIMESTAMP');
+    setClauses.push('updated_at = CURRENT_TIMESTAMP');
     values.push(venueId);
 
-    this.db.prepare(`UPDATE venues SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    await this.pool.query(
+      `UPDATE venues SET ${setClauses.join(', ')} WHERE id = $${idx}`,
+      values
+    );
     return true;
   }
 
-  updateVenueConfig(venueId, config) {
-    const fields = [];
-    const values = [];
-
+  async updateVenueConfig(venueId, config) {
     const allowed = [
       'rate_limit_minutes', 'max_queue_size', 'songs_per_guest',
       'allow_explicit', 'auto_play', 'show_queue_position', 'show_album_art',
       'genre_restrictions', 'blocked_songs'
     ];
 
+    const setClauses = [];
+    const values = [];
+    let idx = 1;
+
     for (const key of allowed) {
       if (config[key] !== undefined) {
-        fields.push(`${key} = ?`);
+        setClauses.push(`${key} = $${idx++}`);
         values.push(config[key]);
       }
     }
 
-    if (fields.length === 0) return false;
+    if (setClauses.length === 0) return false;
 
-    fields.push('updated_at = CURRENT_TIMESTAMP');
+    setClauses.push('updated_at = CURRENT_TIMESTAMP');
     values.push(venueId);
 
-    this.db.prepare(`UPDATE venues SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    await this.pool.query(
+      `UPDATE venues SET ${setClauses.join(', ')} WHERE id = $${idx}`,
+      values
+    );
     return true;
   }
 
-  updateVenuePlan(venueId, planId) {
-    this.db.prepare(`
-      UPDATE venues SET plan_id = ?, subscription_started_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(planId, venueId);
+  async updateVenuePlan(venueId, planId) {
+    await this.pool.query(
+      'UPDATE venues SET plan_id = $1, subscription_started_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [planId, venueId]
+    );
   }
 
-  updateVenueSpotifyTokens(venueId, tokens) {
-    this.db.prepare(`
-      UPDATE venues SET
-        spotify_access_token = ?,
-        spotify_refresh_token = ?,
-        spotify_token_expires_at = ?,
+  async updateVenueSpotifyTokens(venueId, tokens) {
+    await this.pool.query(
+      `UPDATE venues SET
+        spotify_access_token = $1,
+        spotify_refresh_token = $2,
+        spotify_token_expires_at = $3,
         spotify_connected = 1,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(tokens.access_token, tokens.refresh_token, tokens.expires_at, venueId);
+      WHERE id = $4`,
+      [tokens.access_token, tokens.refresh_token, tokens.expires_at, venueId]
+    );
   }
 
-  deleteVenue(venueId) {
-    const tx = this.db.transaction(() => {
-      this.db.prepare('DELETE FROM queue WHERE venue_id = ?').run(venueId);
-      this.db.prepare('DELETE FROM now_playing WHERE venue_id = ?').run(venueId);
-      this.db.prepare('DELETE FROM guest_sessions WHERE venue_id = ?').run(venueId);
-      this.db.prepare('DELETE FROM playback_history WHERE venue_id = ?').run(venueId);
-      this.db.prepare('DELETE FROM venues WHERE id = ?').run(venueId);
-    });
-    tx();
+  async deleteVenue(venueId) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM queue WHERE venue_id = $1', [venueId]);
+      await client.query('DELETE FROM now_playing WHERE venue_id = $1', [venueId]);
+      await client.query('DELETE FROM guest_sessions WHERE venue_id = $1', [venueId]);
+      await client.query('DELETE FROM playback_history WHERE venue_id = $1', [venueId]);
+      await client.query('DELETE FROM venues WHERE id = $1', [venueId]);
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
   }
 
-  // ============================================
-  // QUEUE OPERATIONS (venue-scoped)
-  // ============================================
-
-  getQueue(venueId) {
-    return this.db.prepare(`
-      SELECT * FROM queue
-      WHERE venue_id = ? AND status = 'pending'
-      ORDER BY position ASC
-    `).all(venueId);
+  async getQueue(venueId) {
+    const { rows } = await this.pool.query(
+      "SELECT * FROM queue WHERE venue_id = $1 AND status = 'pending' ORDER BY position ASC",
+      [venueId]
+    );
+    return rows;
   }
 
-  addToQueue(venueId, song) {
-    const venue = this.getVenueById(venueId);
-    const plan = this.getPlan(venue.plan_id);
+  async addToQueue(venueId, song) {
+    const venue = await this.getVenueById(venueId);
+    const plan = await this.getPlan(venue.plan_id);
 
-    // Check queue size limit
-    const currentSize = this.db.prepare(
-      "SELECT COUNT(*) as count FROM queue WHERE venue_id = ? AND status = 'pending'"
-    ).get(venueId);
+    const { rows: countRows } = await this.pool.query(
+      "SELECT COUNT(*)::int as count FROM queue WHERE venue_id = $1 AND status = 'pending'",
+      [venueId]
+    );
 
-    if (currentSize.count >= (venue.max_queue_size || plan.max_queue_size)) {
+    if (countRows[0].count >= (venue.max_queue_size || plan.max_queue_size)) {
       throw new Error(`Queue is full (max ${venue.max_queue_size || plan.max_queue_size} songs)`);
     }
 
-    // Check duplicate
-    const duplicate = this.db.prepare(
-      "SELECT id FROM queue WHERE venue_id = ? AND song_id = ? AND status = 'pending'"
-    ).get(venueId, song.id);
+    const { rows: dupRows } = await this.pool.query(
+      "SELECT id FROM queue WHERE venue_id = $1 AND song_id = $2 AND status = 'pending'",
+      [venueId, song.id]
+    );
 
-    if (duplicate) {
+    if (dupRows.length > 0) {
       throw new Error('This song is already in the queue');
     }
 
-    const maxPos = this.db.prepare(
-      "SELECT MAX(position) as max FROM queue WHERE venue_id = ? AND status = 'pending'"
-    ).get(venueId);
-
-    const position = (maxPos.max || 0) + 1;
-
-    const result = this.db.prepare(`
-      INSERT INTO queue (venue_id, song_id, title, artist, album, album_art, preview_url, spotify_uri, duration_ms, added_by, guest_name, position)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      venueId, song.id, song.title, song.artist,
-      song.album || '', song.albumArt || '', song.previewUrl || '',
-      song.uri || '', song.durationMs || 0,
-      song.addedBy || 'anonymous', song.guestName || '', position
+    const { rows: maxPosRows } = await this.pool.query(
+      "SELECT COALESCE(MAX(position), 0) as max FROM queue WHERE venue_id = $1 AND status = 'pending'",
+      [venueId]
     );
 
-    return { id: result.lastInsertRowid, position };
+    const position = maxPosRows[0].max + 1;
+
+    const { rows } = await this.pool.query(
+      `INSERT INTO queue (venue_id, song_id, title, artist, album, album_art, preview_url, spotify_uri, duration_ms, added_by, guest_name, position)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       RETURNING id`,
+      [
+        venueId, song.id, song.title, song.artist,
+        song.album || '', song.albumArt || '', song.previewUrl || '',
+        song.uri || '', song.durationMs || 0,
+        song.addedBy || 'anonymous', song.guestName || '', position
+      ]
+    );
+
+    return { id: rows[0].id, position };
   }
 
-  removeFromQueue(venueId, queueId) {
-    const deleted = this.db.prepare('DELETE FROM queue WHERE id = ? AND venue_id = ?').run(queueId, venueId);
-    if (deleted.changes > 0) {
-      this.reorderQueue(venueId);
+  async removeFromQueue(venueId, queueId) {
+    const { rowCount } = await this.pool.query(
+      'DELETE FROM queue WHERE id = $1 AND venue_id = $2',
+      [queueId, venueId]
+    );
+    if (rowCount > 0) {
+      await this.reorderQueue(venueId);
     }
-    return deleted.changes > 0;
+    return rowCount > 0;
   }
 
-  reorderQueue(venueId) {
-    const items = this.db.prepare(`
-      SELECT id FROM queue WHERE venue_id = ? AND status = 'pending' ORDER BY position ASC
-    `).all(venueId);
+  async reorderQueue(venueId) {
+    const { rows } = await this.pool.query(
+      "SELECT id FROM queue WHERE venue_id = $1 AND status = 'pending' ORDER BY position ASC",
+      [venueId]
+    );
 
-    const update = this.db.prepare('UPDATE queue SET position = ? WHERE id = ?');
-    const tx = this.db.transaction(() => {
-      items.forEach((item, index) => {
-        update.run(index + 1, item.id);
-      });
-    });
-    tx();
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (let i = 0; i < rows.length; i++) {
+        await client.query('UPDATE queue SET position = $1 WHERE id = $2', [i + 1, rows[i].id]);
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
   }
 
-  clearQueue(venueId) {
-    this.db.prepare("DELETE FROM queue WHERE venue_id = ?").run(venueId);
+  async clearQueue(venueId) {
+    await this.pool.query('DELETE FROM queue WHERE venue_id = $1', [venueId]);
   }
 
-  playNext(venueId) {
-    const next = this.db.prepare(`
-      SELECT * FROM queue WHERE venue_id = ? AND status = 'pending' ORDER BY position ASC LIMIT 1
-    `).get(venueId);
+  async playNext(venueId) {
+    const { rows } = await this.pool.query(
+      "SELECT * FROM queue WHERE venue_id = $1 AND status = 'pending' ORDER BY position ASC LIMIT 1",
+      [venueId]
+    );
 
-    if (next) {
-      this.db.prepare("UPDATE queue SET status = 'playing' WHERE id = ?").run(next.id);
-      this.setNowPlaying(venueId, next);
+    if (rows.length > 0) {
+      const next = rows[0];
+      await this.pool.query("UPDATE queue SET status = 'playing' WHERE id = $1", [next.id]);
+      await this.setNowPlaying(venueId, next);
       return next;
     }
 
     return null;
   }
 
-  // ============================================
-  // NOW PLAYING (venue-scoped)
-  // ============================================
-
-  getNowPlaying(venueId) {
-    return this.db.prepare('SELECT * FROM now_playing WHERE venue_id = ?').get(venueId);
+  async getNowPlaying(venueId) {
+    const { rows } = await this.pool.query('SELECT * FROM now_playing WHERE venue_id = $1', [venueId]);
+    return rows[0] || null;
   }
 
-  setNowPlaying(venueId, song) {
-    this.db.prepare(`
-      INSERT OR REPLACE INTO now_playing (venue_id, song_id, title, artist, album, album_art, preview_url, spotify_uri, duration_ms, started_at, added_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
-    `).run(
-      venueId, song.song_id || song.id, song.title, song.artist,
-      song.album || '', song.album_art || song.albumArt || '',
-      song.preview_url || song.previewUrl || '',
-      song.spotify_uri || song.uri || '',
-      song.duration_ms || song.durationMs || 0,
-      song.added_by || song.addedBy || 'anonymous'
+  async setNowPlaying(venueId, song) {
+    await this.pool.query(
+      `INSERT INTO now_playing (venue_id, song_id, title, artist, album, album_art, preview_url, spotify_uri, duration_ms, started_at, added_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, $10)
+       ON CONFLICT (venue_id)
+       DO UPDATE SET
+         song_id = EXCLUDED.song_id,
+         title = EXCLUDED.title,
+         artist = EXCLUDED.artist,
+         album = EXCLUDED.album,
+         album_art = EXCLUDED.album_art,
+         preview_url = EXCLUDED.preview_url,
+         spotify_uri = EXCLUDED.spotify_uri,
+         duration_ms = EXCLUDED.duration_ms,
+         started_at = CURRENT_TIMESTAMP,
+         added_by = EXCLUDED.added_by`,
+      [
+        venueId, song.song_id || song.id, song.title, song.artist,
+        song.album || '', song.album_art || song.albumArt || '',
+        song.preview_url || song.previewUrl || '',
+        song.spotify_uri || song.uri || '',
+        song.duration_ms || song.durationMs || 0,
+        song.added_by || song.addedBy || 'anonymous'
+      ]
     );
 
-    this.addToHistory(venueId, song);
+    await this.addToHistory(venueId, song);
   }
 
-  clearNowPlaying(venueId) {
-    this.db.prepare('DELETE FROM now_playing WHERE venue_id = ?').run(venueId);
+  async clearNowPlaying(venueId) {
+    await this.pool.query('DELETE FROM now_playing WHERE venue_id = $1', [venueId]);
   }
 
-  // ============================================
-  // GUEST RATE LIMITING (venue-scoped)
-  // ============================================
-
-  getGuestSession(venueId, guestId) {
-    return this.db.prepare('SELECT * FROM guest_sessions WHERE venue_id = ? AND guest_id = ?').get(venueId, guestId);
+  async getGuestSession(venueId, guestId) {
+    const { rows } = await this.pool.query(
+      'SELECT * FROM guest_sessions WHERE venue_id = $1 AND guest_id = $2',
+      [venueId, guestId]
+    );
+    return rows[0] || null;
   }
 
-  createOrUpdateGuestSession(venueId, guestId, ipAddress) {
-    const existing = this.getGuestSession(venueId, guestId);
+  async createOrUpdateGuestSession(venueId, guestId, ipAddress) {
+    const existing = await this.getGuestSession(venueId, guestId);
     if (existing) {
-      this.db.prepare(`
-        UPDATE guest_sessions SET ip_address = ?, updated_at = CURRENT_TIMESTAMP WHERE venue_id = ? AND guest_id = ?
-      `).run(ipAddress, venueId, guestId);
+      await this.pool.query(
+        'UPDATE guest_sessions SET ip_address = $1, updated_at = CURRENT_TIMESTAMP WHERE venue_id = $2 AND guest_id = $3',
+        [ipAddress, venueId, guestId]
+      );
     } else {
-      this.db.prepare(`
-        INSERT INTO guest_sessions (venue_id, guest_id, ip_address) VALUES (?, ?, ?)
-      `).run(venueId, guestId, ipAddress);
+      await this.pool.query(
+        'INSERT INTO guest_sessions (venue_id, guest_id, ip_address) VALUES ($1, $2, $3)',
+        [venueId, guestId, ipAddress]
+      );
     }
   }
 
-  canGuestRequest(venueId, guestId, rateLimitMinutes = 5) {
-    const session = this.getGuestSession(venueId, guestId);
+  async canGuestRequest(venueId, guestId, rateLimitMinutes = 5) {
+    const session = await this.getGuestSession(venueId, guestId);
 
     if (!session || !session.last_request_at) {
       return { allowed: true, timeRemaining: 0 };
     }
 
-    const lastRequest = new Date(session.last_request_at + 'Z');
+    const lastRequest = new Date(session.last_request_at);
     const now = new Date();
     const minutesElapsed = (now - lastRequest) / 1000 / 60;
 
@@ -523,131 +517,145 @@ class QueuePlayDB {
     return { allowed: false, timeRemaining };
   }
 
-  updateGuestLastRequest(venueId, guestId) {
+  async updateGuestLastRequest(venueId, guestId) {
     const today = new Date().toISOString().split('T')[0];
-    const session = this.getGuestSession(venueId, guestId);
+    const session = await this.getGuestSession(venueId, guestId);
 
     let songsToday = 1;
     if (session && session.last_song_date === today) {
       songsToday = (session.songs_today || 0) + 1;
     }
 
-    this.db.prepare(`
-      UPDATE guest_sessions
-      SET last_request_at = CURRENT_TIMESTAMP,
-          request_count = request_count + 1,
-          songs_today = ?,
-          last_song_date = ?,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE venue_id = ? AND guest_id = ?
-    `).run(songsToday, today, venueId, guestId);
+    await this.pool.query(
+      `UPDATE guest_sessions
+       SET last_request_at = CURRENT_TIMESTAMP,
+           request_count = request_count + 1,
+           songs_today = $1,
+           last_song_date = $2,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE venue_id = $3 AND guest_id = $4`,
+      [songsToday, today, venueId, guestId]
+    );
   }
 
-  getGuestSongsToday(venueId, guestId) {
+  async getGuestSongsToday(venueId, guestId) {
     const today = new Date().toISOString().split('T')[0];
-    const session = this.getGuestSession(venueId, guestId);
+    const session = await this.getGuestSession(venueId, guestId);
     if (!session || session.last_song_date !== today) return 0;
     return session.songs_today || 0;
   }
 
-  resetGuestLimits(venueId) {
-    this.db.prepare('UPDATE guest_sessions SET last_request_at = NULL, songs_today = 0 WHERE venue_id = ?').run(venueId);
+  async resetGuestLimits(venueId) {
+    await this.pool.query(
+      'UPDATE guest_sessions SET last_request_at = NULL, songs_today = 0 WHERE venue_id = $1',
+      [venueId]
+    );
   }
 
-  // ============================================
-  // HISTORY & ANALYTICS
-  // ============================================
-
-  addToHistory(venueId, song) {
-    this.db.prepare(`
-      INSERT INTO playback_history (venue_id, song_id, title, artist, album, added_by)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(venueId, song.song_id || song.id, song.title, song.artist, song.album || '', song.added_by || song.addedBy || 'anonymous');
+  async addToHistory(venueId, song) {
+    await this.pool.query(
+      'INSERT INTO playback_history (venue_id, song_id, title, artist, album, added_by) VALUES ($1, $2, $3, $4, $5, $6)',
+      [
+        venueId, song.song_id || song.id, song.title, song.artist,
+        song.album || '',
+        song.added_by || song.addedBy || 'anonymous'
+      ]
+    );
   }
 
-  getHistory(venueId, limit = 50) {
-    return this.db.prepare(`
-      SELECT * FROM playback_history WHERE venue_id = ? ORDER BY played_at DESC LIMIT ?
-    `).all(venueId, limit);
+  async getHistory(venueId, limit = 50) {
+    const { rows } = await this.pool.query(
+      'SELECT * FROM playback_history WHERE venue_id = $1 ORDER BY played_at DESC LIMIT $2',
+      [venueId, limit]
+    );
+    return rows;
   }
 
-  getVenueStats(venueId) {
-    const queueCount = this.db.prepare("SELECT COUNT(*) as count FROM queue WHERE venue_id = ? AND status = 'pending'").get(venueId);
-    const totalPlayed = this.db.prepare('SELECT COUNT(*) as count FROM playback_history WHERE venue_id = ?').get(venueId);
-    const activeGuests = this.db.prepare('SELECT COUNT(*) as count FROM guest_sessions WHERE venue_id = ?').get(venueId);
-    const topSongs = this.db.prepare(`
-      SELECT title, artist, COUNT(*) as play_count FROM playback_history
-      WHERE venue_id = ? GROUP BY song_id ORDER BY play_count DESC LIMIT 10
-    `).all(venueId);
-    const todayPlayed = this.db.prepare(`
-      SELECT COUNT(*) as count FROM playback_history
-      WHERE venue_id = ? AND date(played_at) = date('now')
-    `).get(venueId);
+  async getVenueStats(venueId) {
+    const { rows: queueCount } = await this.pool.query(
+      "SELECT COUNT(*)::int as count FROM queue WHERE venue_id = $1 AND status = 'pending'",
+      [venueId]
+    );
+    const { rows: totalPlayed } = await this.pool.query(
+      'SELECT COUNT(*)::int as count FROM playback_history WHERE venue_id = $1',
+      [venueId]
+    );
+    const { rows: activeGuests } = await this.pool.query(
+      'SELECT COUNT(*)::int as count FROM guest_sessions WHERE venue_id = $1',
+      [venueId]
+    );
+    const { rows: topSongs } = await this.pool.query(
+      `SELECT title, artist, COUNT(*)::int as play_count FROM playback_history
+       WHERE venue_id = $1 GROUP BY song_id, title, artist ORDER BY play_count DESC LIMIT 10`,
+      [venueId]
+    );
+    const { rows: todayPlayed } = await this.pool.query(
+      "SELECT COUNT(*)::int as count FROM playback_history WHERE venue_id = $1 AND played_at::date = CURRENT_DATE",
+      [venueId]
+    );
 
     return {
-      queueCount: queueCount.count,
-      totalPlayed: totalPlayed.count,
-      todayPlayed: todayPlayed.count,
-      activeGuests: activeGuests.count,
+      queueCount: queueCount[0].count,
+      totalPlayed: totalPlayed[0].count,
+      todayPlayed: todayPlayed[0].count,
+      activeGuests: activeGuests[0].count,
       topSongs
     };
   }
 
-  // ============================================
-  // SUBSCRIPTION PLANS
-  // ============================================
-
-  getAllPlans() {
-    return this.db.prepare('SELECT * FROM subscription_plans ORDER BY price_monthly ASC').all();
+  async getAllPlans() {
+    const { rows } = await this.pool.query('SELECT * FROM subscription_plans ORDER BY price_monthly ASC');
+    return rows.map(p => ({ ...p, features: JSON.parse(p.features_json || '[]') }));
   }
 
-  getPlan(planId) {
-    return this.db.prepare('SELECT * FROM subscription_plans WHERE id = ?').get(planId);
+  async getPlan(planId) {
+    const { rows } = await this.pool.query('SELECT * FROM subscription_plans WHERE id = $1', [planId]);
+    return rows[0] || null;
   }
 
-  // ============================================
-  // SUPER ADMIN
-  // ============================================
+  async getPlatformStats() {
+    const { rows: totalVenues } = await this.pool.query('SELECT COUNT(*)::int as count FROM venues');
+    const { rows: activeVenues } = await this.pool.query("SELECT COUNT(*)::int as count FROM venues WHERE is_active = 1");
+    const { rows: totalSongsPlayed } = await this.pool.query('SELECT COUNT(*)::int as count FROM playback_history');
+    const { rows: totalGuests } = await this.pool.query('SELECT COUNT(*)::int as count FROM guest_sessions');
 
-  getPlatformStats() {
-    const totalVenues = this.db.prepare('SELECT COUNT(*) as count FROM venues').get();
-    const activeVenues = this.db.prepare("SELECT COUNT(*) as count FROM venues WHERE is_active = 1").get();
-    const totalSongsPlayed = this.db.prepare('SELECT COUNT(*) as count FROM playback_history').get();
-    const totalGuests = this.db.prepare('SELECT COUNT(*) as count FROM guest_sessions').get();
-
-    const revenueByPlan = this.db.prepare(`
-      SELECT sp.name, sp.price_monthly, COUNT(v.id) as venue_count,
+    const { rows: revenueByPlan } = await this.pool.query(`
+      SELECT sp.name, sp.price_monthly, COUNT(v.id)::int as venue_count,
         COUNT(v.id) * sp.price_monthly as monthly_revenue
       FROM subscription_plans sp
       LEFT JOIN venues v ON v.plan_id = sp.id AND v.is_active = 1
-      GROUP BY sp.id
+      GROUP BY sp.id, sp.name, sp.price_monthly
       ORDER BY sp.price_monthly ASC
-    `).all();
+    `);
 
-    const totalMRR = revenueByPlan.reduce((sum, p) => sum + (p.monthly_revenue || 0), 0);
+    const totalMRR = revenueByPlan.reduce((sum, p) => sum + Number(p.monthly_revenue || 0), 0);
 
     return {
-      totalVenues: totalVenues.count,
-      activeVenues: activeVenues.count,
-      totalSongsPlayed: totalSongsPlayed.count,
-      totalGuests: totalGuests.count,
+      totalVenues: totalVenues[0].count,
+      activeVenues: activeVenues[0].count,
+      totalSongsPlayed: totalSongsPlayed[0].count,
+      totalGuests: totalGuests[0].count,
       totalMRR,
       revenueByPlan
     };
   }
 
-  getSuperAdmin(email) {
-    return this.db.prepare('SELECT * FROM super_admins WHERE email = ?').get(email);
+  async getSuperAdmin(email) {
+    const { rows } = await this.pool.query('SELECT * FROM super_admins WHERE email = $1', [email]);
+    return rows[0] || null;
   }
 
-  createSuperAdmin(email, passwordHash, name) {
+  async createSuperAdmin(email, passwordHash, name) {
     const id = uuidv4();
-    this.db.prepare('INSERT INTO super_admins (id, email, password_hash, name) VALUES (?, ?, ?, ?)').run(id, email, passwordHash, name);
+    await this.pool.query(
+      'INSERT INTO super_admins (id, email, password_hash, name) VALUES ($1, $2, $3, $4)',
+      [id, email, passwordHash, name]
+    );
     return { id, email };
   }
 
-  close() {
-    this.db.close();
+  async close() {
+    await this.pool.end();
   }
 }
 

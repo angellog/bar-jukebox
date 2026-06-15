@@ -1,7 +1,3 @@
-// ============================================
-// QUEUEPLAY - MAIN SERVER
-// ============================================
-
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -16,39 +12,35 @@ const QRCode = require('qrcode');
 const QueuePlayDB = require('./database');
 const SpotifyService = require('./spotify');
 
-// ============================================
-// CONFIGURATION
-// ============================================
-
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 const PORT = process.env.PORT || 3000;
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
+const DATABASE_URL = process.env.DATABASE_URL;
 
-const db = new QueuePlayDB(process.env.DATABASE_PATH || './database/queueplay.db');
+if (!DATABASE_URL) {
+  console.error('[FATAL] DATABASE_URL environment variable is required');
+  process.exit(1);
+}
+
+const db = new QueuePlayDB(DATABASE_URL);
 const spotify = new SpotifyService(
   process.env.SPOTIFY_CLIENT_ID,
   process.env.SPOTIFY_CLIENT_SECRET,
   `${BASE_URL}/auth/spotify/callback`
 );
 
-// Simple password hashing (use bcrypt in production)
 function hashPassword(password) {
   return crypto.createHash('sha256').update(password + (process.env.SALT || 'queueplay-salt')).digest('hex');
 }
-
-// ============================================
-// MIDDLEWARE
-// ============================================
 
 app.use(cors());
 app.use(express.json());
 app.use(cookieParser());
 app.use('/assets', express.static(path.join(__dirname, '..', 'public', 'assets')));
 
-// Guest identification middleware
 function guestIdentity(req, res, next) {
   let guestId = req.cookies.qp_guest;
   if (!guestId) {
@@ -62,19 +54,22 @@ function guestIdentity(req, res, next) {
 
 app.use(guestIdentity);
 
-// Venue resolution middleware - extracts venue from URL
-function resolveVenue(req, res, next) {
-  const slug = req.params.venueSlug;
-  if (!slug) return res.status(400).json({ error: 'Venue slug required' });
+async function resolveVenue(req, res, next) {
+  try {
+    const slug = req.params.venueSlug;
+    if (!slug) return res.status(400).json({ error: 'Venue slug required' });
 
-  const venue = db.getVenueBySlug(slug);
-  if (!venue) return res.status(404).json({ error: 'Venue not found' });
+    const venue = await db.getVenueBySlug(slug);
+    if (!venue) return res.status(404).json({ error: 'Venue not found' });
 
-  req.venue = venue;
-  next();
+    req.venue = venue;
+    next();
+  } catch (error) {
+    console.error('[Resolve Venue Error]', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 }
 
-// Venue admin auth
 function venueAdminAuth(req, res, next) {
   const adminKey = req.headers['x-admin-key'] || req.query.admin_key;
   if (!req.venue) return res.status(400).json({ error: 'Venue not resolved' });
@@ -82,20 +77,15 @@ function venueAdminAuth(req, res, next) {
   next();
 }
 
-// Super admin auth
 function superAdminAuth(req, res, next) {
   const key = req.headers['x-super-key'];
   if (key !== process.env.SUPER_ADMIN_KEY) return res.status(401).json({ error: 'Unauthorized' });
   next();
 }
 
-// ============================================
-// WEBSOCKET - VENUE-SCOPED REAL-TIME
-// ============================================
+const venueClients = new Map();
 
-const venueClients = new Map(); // venueId -> Set<ws>
-
-wss.on('connection', (ws, req) => {
+wss.on('connection', async (ws, req) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const venueId = url.searchParams.get('venue');
 
@@ -104,12 +94,16 @@ wss.on('connection', (ws, req) => {
   if (!venueClients.has(venueId)) venueClients.set(venueId, new Set());
   venueClients.get(venueId).add(ws);
 
-  // Send current state
-  ws.send(JSON.stringify({
-    type: 'init',
-    queue: db.getQueue(venueId),
-    nowPlaying: db.getNowPlaying(venueId)
-  }));
+  try {
+    const [queue, nowPlaying] = await Promise.all([
+      db.getQueue(venueId),
+      db.getNowPlaying(venueId)
+    ]);
+
+    ws.send(JSON.stringify({ type: 'init', queue, nowPlaying }));
+  } catch (error) {
+    console.error('[WS Init Error]', error.message);
+  }
 
   ws.on('close', () => {
     const clients = venueClients.get(venueId);
@@ -129,52 +123,36 @@ function broadcastToVenue(venueId, type, data) {
   });
 }
 
-// ============================================
-// PAGE ROUTES
-// ============================================
-
-// Landing / marketing page
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'landing.html'));
 });
 
-// Pricing page
 app.get('/pricing', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'pricing.html'));
 });
 
-// Venue registration
 app.get('/register', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'register.html'));
 });
 
-// Guest page (public - customers scan QR and land here)
 app.get('/v/:venueSlug', resolveVenue, (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'guest', 'index.html'));
 });
 
-// Venue admin dashboard
 app.get('/admin/:venueSlug', resolveVenue, (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'admin', 'index.html'));
 });
 
-// Venue player (bar speaker device)
 app.get('/player/:venueSlug', resolveVenue, (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'player', 'index.html'));
 });
 
-// Super admin panel
 app.get('/superadmin', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'superadmin', 'index.html'));
 });
 
-// ============================================
-// API: VENUE DATA (public - for page rendering)
-// ============================================
-
 app.get('/api/venue/:venueSlug', resolveVenue, (req, res) => {
   const v = req.venue;
-  // Public-safe venue data (no tokens, no admin keys)
   res.json({
     id: v.id,
     slug: v.slug,
@@ -202,10 +180,6 @@ app.get('/api/venue/:venueSlug', resolveVenue, (req, res) => {
   });
 });
 
-// ============================================
-// API: SEARCH (venue-scoped)
-// ============================================
-
 app.get('/api/venue/:venueSlug/search', resolveVenue, async (req, res) => {
   try {
     const { q } = req.query;
@@ -217,7 +191,6 @@ app.get('/api/venue/:venueSlug/search', resolveVenue, async (req, res) => {
 
     let results = await spotify.search(q);
 
-    // Filter explicit content if venue disallows it
     if (!req.venue.allow_explicit) {
       results = results.filter(r => !r.explicit);
     }
@@ -229,13 +202,10 @@ app.get('/api/venue/:venueSlug/search', resolveVenue, async (req, res) => {
   }
 });
 
-// ============================================
-// API: QUEUE (venue-scoped)
-// ============================================
-
-app.get('/api/venue/:venueSlug/queue', resolveVenue, (req, res) => {
+app.get('/api/venue/:venueSlug/queue', resolveVenue, async (req, res) => {
   try {
-    res.json({ queue: db.getQueue(req.venue.id) });
+    const queue = await db.getQueue(req.venue.id);
+    res.json({ queue });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch queue' });
   }
@@ -247,13 +217,11 @@ app.post('/api/venue/:venueSlug/queue', resolveVenue, async (req, res) => {
     if (!songId) return res.status(400).json({ error: 'Song ID required' });
 
     const venue = req.venue;
-    const plan = db.getPlan(venue.plan_id);
+    const plan = await db.getPlan(venue.plan_id);
 
-    // Ensure guest session exists
-    db.createOrUpdateGuestSession(venue.id, req.guestId, req.guestIp);
+    await db.createOrUpdateGuestSession(venue.id, req.guestId, req.guestIp);
 
-    // Check rate limit
-    const rateCheck = db.canGuestRequest(venue.id, req.guestId, venue.rate_limit_minutes || plan.rate_limit_minutes);
+    const rateCheck = await db.canGuestRequest(venue.id, req.guestId, venue.rate_limit_minutes || plan.rate_limit_minutes);
     if (!rateCheck.allowed) {
       return res.status(429).json({
         error: 'Rate limit exceeded',
@@ -262,8 +230,7 @@ app.post('/api/venue/:venueSlug/queue', resolveVenue, async (req, res) => {
       });
     }
 
-    // Check daily limit
-    const songsToday = db.getGuestSongsToday(venue.id, req.guestId);
+    const songsToday = await db.getGuestSongsToday(venue.id, req.guestId);
     const maxPerDay = plan.max_songs_per_day;
     if (songsToday >= (venue.songs_per_guest || maxPerDay)) {
       return res.status(429).json({
@@ -272,25 +239,24 @@ app.post('/api/venue/:venueSlug/queue', resolveVenue, async (req, res) => {
       });
     }
 
-    // Fetch song details
     const song = await spotify.getTrack(songId);
     song.addedBy = req.guestId;
     song.guestName = guestName || '';
 
-    // Add to queue
-    const result = db.addToQueue(venue.id, song);
+    const result = await db.addToQueue(venue.id, song);
 
-    // Update rate limit
-    db.updateGuestLastRequest(venue.id, req.guestId);
+    await db.updateGuestLastRequest(venue.id, req.guestId);
 
-    // Broadcast
-    broadcastToVenue(venue.id, 'queue_updated', { queue: db.getQueue(venue.id) });
+    const queue = await db.getQueue(venue.id);
+    broadcastToVenue(venue.id, 'queue_updated', { queue });
 
-    // Auto-play if nothing playing and Spotify is connected
-    if (venue.auto_play && venue.spotify_connected && !db.getNowPlaying(venue.id)) {
-      const nextSong = db.playNext(venue.id);
-      if (nextSong) {
-        broadcastToVenue(venue.id, 'now_playing', nextSong);
+    if (venue.auto_play && venue.spotify_connected) {
+      const current = await db.getNowPlaying(venue.id);
+      if (!current) {
+        const nextSong = await db.playNext(venue.id);
+        if (nextSong) {
+          broadcastToVenue(venue.id, 'now_playing', nextSong);
+        }
       }
     }
 
@@ -305,11 +271,12 @@ app.post('/api/venue/:venueSlug/queue', resolveVenue, async (req, res) => {
   }
 });
 
-app.delete('/api/venue/:venueSlug/queue/:id', resolveVenue, venueAdminAuth, (req, res) => {
+app.delete('/api/venue/:venueSlug/queue/:id', resolveVenue, venueAdminAuth, async (req, res) => {
   try {
-    const success = db.removeFromQueue(req.venue.id, parseInt(req.params.id));
+    const success = await db.removeFromQueue(req.venue.id, parseInt(req.params.id));
     if (success) {
-      broadcastToVenue(req.venue.id, 'queue_updated', { queue: db.getQueue(req.venue.id) });
+      const queue = await db.getQueue(req.venue.id);
+      broadcastToVenue(req.venue.id, 'queue_updated', { queue });
       res.json({ success: true });
     } else {
       res.status(404).json({ error: 'Queue item not found' });
@@ -319,23 +286,21 @@ app.delete('/api/venue/:venueSlug/queue/:id', resolveVenue, venueAdminAuth, (req
   }
 });
 
-// ============================================
-// API: PLAYBACK (venue-scoped)
-// ============================================
-
-app.get('/api/venue/:venueSlug/now-playing', resolveVenue, (req, res) => {
-  res.json({ nowPlaying: db.getNowPlaying(req.venue.id) });
+app.get('/api/venue/:venueSlug/now-playing', resolveVenue, async (req, res) => {
+  const nowPlaying = await db.getNowPlaying(req.venue.id);
+  res.json({ nowPlaying });
 });
 
-app.post('/api/venue/:venueSlug/play-next', resolveVenue, venueAdminAuth, (req, res) => {
+app.post('/api/venue/:venueSlug/play-next', resolveVenue, venueAdminAuth, async (req, res) => {
   try {
-    const nextSong = db.playNext(req.venue.id);
+    const nextSong = await db.playNext(req.venue.id);
     if (nextSong) {
       broadcastToVenue(req.venue.id, 'now_playing', nextSong);
-      broadcastToVenue(req.venue.id, 'queue_updated', { queue: db.getQueue(req.venue.id) });
+      const queue = await db.getQueue(req.venue.id);
+      broadcastToVenue(req.venue.id, 'queue_updated', { queue });
       res.json({ success: true, nowPlaying: nextSong });
     } else {
-      db.clearNowPlaying(req.venue.id);
+      await db.clearNowPlaying(req.venue.id);
       broadcastToVenue(req.venue.id, 'now_playing', null);
       res.json({ success: true, nowPlaying: null, message: 'Queue is empty' });
     }
@@ -344,19 +309,15 @@ app.post('/api/venue/:venueSlug/play-next', resolveVenue, venueAdminAuth, (req, 
   }
 });
 
-app.get('/api/venue/:venueSlug/rate-limit', resolveVenue, (req, res) => {
+app.get('/api/venue/:venueSlug/rate-limit', resolveVenue, async (req, res) => {
   try {
-    const plan = db.getPlan(req.venue.plan_id);
-    const rateCheck = db.canGuestRequest(req.venue.id, req.guestId, req.venue.rate_limit_minutes || plan.rate_limit_minutes);
+    const plan = await db.getPlan(req.venue.plan_id);
+    const rateCheck = await db.canGuestRequest(req.venue.id, req.guestId, req.venue.rate_limit_minutes || plan.rate_limit_minutes);
     res.json({ ...rateCheck, rateLimitMinutes: req.venue.rate_limit_minutes || plan.rate_limit_minutes });
   } catch (error) {
     res.status(500).json({ error: 'Failed to check rate limit' });
   }
 });
-
-// ============================================
-// API: VENUE ADMIN
-// ============================================
 
 app.post('/api/venue/:venueSlug/admin/login', resolveVenue, (req, res) => {
   const { password } = req.body;
@@ -367,42 +328,43 @@ app.post('/api/venue/:venueSlug/admin/login', resolveVenue, (req, res) => {
   res.json({ success: true, adminKey: req.venue.admin_key, venue: { id: req.venue.id, slug: req.venue.slug, name: req.venue.name } });
 });
 
-app.get('/api/venue/:venueSlug/admin/stats', resolveVenue, venueAdminAuth, (req, res) => {
-  res.json(db.getVenueStats(req.venue.id));
+app.get('/api/venue/:venueSlug/admin/stats', resolveVenue, venueAdminAuth, async (req, res) => {
+  const stats = await db.getVenueStats(req.venue.id);
+  res.json(stats);
 });
 
-app.get('/api/venue/:venueSlug/admin/history', resolveVenue, venueAdminAuth, (req, res) => {
-  res.json({ history: db.getHistory(req.venue.id, parseInt(req.query.limit) || 50) });
+app.get('/api/venue/:venueSlug/admin/history', resolveVenue, venueAdminAuth, async (req, res) => {
+  const history = await db.getHistory(req.venue.id, parseInt(req.query.limit) || 50);
+  res.json({ history });
 });
 
-app.put('/api/venue/:venueSlug/admin/branding', resolveVenue, venueAdminAuth, (req, res) => {
-  const plan = db.getPlan(req.venue.plan_id);
+app.put('/api/venue/:venueSlug/admin/branding', resolveVenue, venueAdminAuth, async (req, res) => {
+  const plan = await db.getPlan(req.venue.plan_id);
   if (!plan.custom_branding && req.venue.plan_id !== 'free') {
     return res.status(403).json({ error: 'Custom branding requires Starter plan or above' });
   }
-  db.updateVenueBranding(req.venue.id, req.body);
+  await db.updateVenueBranding(req.venue.id, req.body);
   res.json({ success: true });
 });
 
-app.put('/api/venue/:venueSlug/admin/config', resolveVenue, venueAdminAuth, (req, res) => {
-  db.updateVenueConfig(req.venue.id, req.body);
+app.put('/api/venue/:venueSlug/admin/config', resolveVenue, venueAdminAuth, async (req, res) => {
+  await db.updateVenueConfig(req.venue.id, req.body);
   res.json({ success: true });
 });
 
-app.post('/api/venue/:venueSlug/admin/clear-queue', resolveVenue, venueAdminAuth, (req, res) => {
-  db.clearQueue(req.venue.id);
-  db.clearNowPlaying(req.venue.id);
+app.post('/api/venue/:venueSlug/admin/clear-queue', resolveVenue, venueAdminAuth, async (req, res) => {
+  await db.clearQueue(req.venue.id);
+  await db.clearNowPlaying(req.venue.id);
   broadcastToVenue(req.venue.id, 'queue_updated', { queue: [] });
   broadcastToVenue(req.venue.id, 'now_playing', null);
   res.json({ success: true });
 });
 
-app.post('/api/venue/:venueSlug/admin/reset-limits', resolveVenue, venueAdminAuth, (req, res) => {
-  db.resetGuestLimits(req.venue.id);
+app.post('/api/venue/:venueSlug/admin/reset-limits', resolveVenue, venueAdminAuth, async (req, res) => {
+  await db.resetGuestLimits(req.venue.id);
   res.json({ success: true });
 });
 
-// QR Code generation
 app.get('/api/venue/:venueSlug/qr', resolveVenue, async (req, res) => {
   try {
     const url = `${BASE_URL}/v/${req.venue.slug}`;
@@ -417,18 +379,12 @@ app.get('/api/venue/:venueSlug/qr', resolveVenue, async (req, res) => {
   }
 });
 
-// Full venue data for admin
-app.get('/api/venue/:venueSlug/admin/full', resolveVenue, venueAdminAuth, (req, res) => {
+app.get('/api/venue/:venueSlug/admin/full', resolveVenue, venueAdminAuth, async (req, res) => {
   const v = req.venue;
-  // Exclude sensitive tokens
   const { spotify_access_token, spotify_refresh_token, admin_password_hash, ...safe } = v;
-  const plan = db.getPlan(v.plan_id);
+  const plan = await db.getPlan(v.plan_id);
   res.json({ venue: safe, plan });
 });
-
-// ============================================
-// API: SPOTIFY OAUTH (venue connects their account)
-// ============================================
 
 app.get('/auth/spotify/connect/:venueSlug', resolveVenue, (req, res) => {
   if (!process.env.SPOTIFY_CLIENT_ID || !process.env.SPOTIFY_CLIENT_SECRET) {
@@ -458,29 +414,28 @@ app.get('/auth/spotify/callback', async (req, res) => {
     if (!code || !venueId) return res.status(400).send('Missing auth code');
 
     const tokens = await spotify.exchangeCode(code);
-    db.updateVenueSpotifyTokens(venueId, tokens);
+    await db.updateVenueSpotifyTokens(venueId, tokens);
 
-    const venue = db.getVenueById(venueId);
+    const venue = await db.getVenueById(venueId);
 
-    // Auto-play first queued song after connecting Spotify
-    if (venue.auto_play) {
-      const current = db.getNowPlaying(venue.id);
+    if (venue && venue.auto_play) {
+      const current = await db.getNowPlaying(venue.id);
       if (!current) {
-        const nextSong = db.playNext(venue.id);
+        const nextSong = await db.playNext(venue.id);
         if (nextSong) {
           broadcastToVenue(venue.id, 'now_playing', nextSong);
         }
       }
     }
 
-    res.redirect(`/admin/${venue.slug}?spotify=connected`);
+    const slug = venue ? venue.slug : '';
+    res.redirect(`/admin/${slug}?spotify=connected`);
   } catch (error) {
     console.error('[Spotify OAuth Error]', error.message);
     res.status(500).send('Spotify connection failed. Please try again.');
   }
 });
 
-// Get Spotify token for Web Playback SDK (admin only)
 app.get('/api/venue/:venueSlug/spotify-token', resolveVenue, venueAdminAuth, async (req, res) => {
   try {
     const venue = req.venue;
@@ -488,11 +443,10 @@ app.get('/api/venue/:venueSlug/spotify-token', resolveVenue, venueAdminAuth, asy
       return res.status(400).json({ error: 'Spotify not connected' });
     }
 
-    // Refresh if expired
     const expiresAt = new Date(venue.spotify_token_expires_at);
     if (Date.now() >= expiresAt.getTime()) {
       const tokens = await spotify.refreshToken(venue.spotify_refresh_token);
-      db.updateVenueSpotifyTokens(venue.id, tokens);
+      await db.updateVenueSpotifyTokens(venue.id, tokens);
       return res.json({ token: tokens.access_token });
     }
 
@@ -502,21 +456,16 @@ app.get('/api/venue/:venueSlug/spotify-token', resolveVenue, venueAdminAuth, asy
   }
 });
 
-// ============================================
-// API: VENUE REGISTRATION
-// ============================================
-
-app.post('/api/register', (req, res) => {
+app.post('/api/register', async (req, res) => {
   try {
     const { name, type, email, password, slug } = req.body;
     if (!name || !password) return res.status(400).json({ error: 'Name and password required' });
 
-    // Check slug uniqueness
     const desiredSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    const existing = db.getVenueBySlug(desiredSlug);
+    const existing = await db.getVenueBySlug(desiredSlug);
     if (existing) return res.status(409).json({ error: 'This URL is already taken. Try a different name or custom URL.' });
 
-    const result = db.createVenue({
+    const result = await db.createVenue({
       name,
       type: type || 'cafe',
       email,
@@ -541,41 +490,31 @@ app.post('/api/register', (req, res) => {
   }
 });
 
-// ============================================
-// API: SUBSCRIPTION PLANS
-// ============================================
-
-app.get('/api/plans', (req, res) => {
-  const plans = db.getAllPlans();
-  res.json({ plans: plans.map(p => ({ ...p, features: JSON.parse(p.features_json || '[]') })) });
+app.get('/api/plans', async (req, res) => {
+  const plans = await db.getAllPlans();
+  res.json({ plans });
 });
 
-// ============================================
-// API: SUPER ADMIN
-// ============================================
-
-app.get('/api/superadmin/stats', superAdminAuth, (req, res) => {
-  res.json(db.getPlatformStats());
+app.get('/api/superadmin/stats', superAdminAuth, async (req, res) => {
+  const stats = await db.getPlatformStats();
+  res.json(stats);
 });
 
-app.get('/api/superadmin/venues', superAdminAuth, (req, res) => {
-  res.json({ venues: db.getAllVenues() });
+app.get('/api/superadmin/venues', superAdminAuth, async (req, res) => {
+  const venues = await db.getAllVenues();
+  res.json({ venues });
 });
 
-app.put('/api/superadmin/venues/:id/plan', superAdminAuth, (req, res) => {
+app.put('/api/superadmin/venues/:id/plan', superAdminAuth, async (req, res) => {
   const { planId } = req.body;
-  db.updateVenuePlan(req.params.id, planId);
+  await db.updateVenuePlan(req.params.id, planId);
   res.json({ success: true });
 });
 
-app.delete('/api/superadmin/venues/:id', superAdminAuth, (req, res) => {
-  db.deleteVenue(req.params.id);
+app.delete('/api/superadmin/venues/:id', superAdminAuth, async (req, res) => {
+  await db.deleteVenue(req.params.id);
   res.json({ success: true });
 });
-
-// ============================================
-// HEALTH CHECK
-// ============================================
 
 app.get('/api/health', (req, res) => {
   res.json({
@@ -585,24 +524,33 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ============================================
-// START SERVER
-// ============================================
+async function start() {
+  try {
+    await db.initializeSchema();
 
-server.listen(PORT, () => {
-  console.log('');
-  console.log('  ╔══════════════════════════════════════╗');
-  console.log('  ║        QUEUEPLAY SERVER v2.0         ║');
-  console.log('  ╠══════════════════════════════════════╣');
-  console.log(`  ║  Server:   ${BASE_URL.padEnd(25)}║`);
-  console.log(`  ║  Spotify:  ${process.env.SPOTIFY_CLIENT_ID ? 'Connected'.padEnd(25) : 'Not configured'.padEnd(25)}║`);
-  console.log('  ╚══════════════════════════════════════╝');
-  console.log('');
-});
+    server.listen(PORT, () => {
+      console.log('');
+      console.log('  ╔══════════════════════════════════════╗');
+      console.log('  ║        QUEUEPLAY SERVER v2.0         ║');
+      console.log('  ║         (PostgreSQL Edition)          ║');
+      console.log('  ╠══════════════════════════════════════╣');
+      console.log(`  ║  Server:   ${BASE_URL.padEnd(25)}║`);
+      console.log(`  ║  Database: PostgreSQL                ║`);
+      console.log(`  ║  Spotify:  ${process.env.SPOTIFY_CLIENT_ID ? 'Connected'.padEnd(25) : 'Not configured'.padEnd(25)}║`);
+      console.log('  ╚══════════════════════════════════════╝');
+      console.log('');
+    });
+  } catch (err) {
+    console.error('[FATAL] Failed to initialize database:', err.message);
+    process.exit(1);
+  }
+}
 
-process.on('SIGINT', () => {
+start();
+
+process.on('SIGINT', async () => {
   console.log('\n  Shutting down...');
-  db.close();
+  await db.close();
   server.close(() => process.exit(0));
 });
 

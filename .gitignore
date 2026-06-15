@@ -1,7 +1,6 @@
 node_modules/
 .env
-database/*.db
-database/*.db-*
+database/
 *.log
 .DS_Store
 .vscode/
