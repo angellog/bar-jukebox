@@ -67,7 +67,7 @@ class QueuePlayDB {
         custom_css TEXT,
         rate_limit_minutes INTEGER DEFAULT 5,
         max_queue_size INTEGER DEFAULT 20,
-        songs_per_guest INTEGER DEFAULT 1,
+        songs_per_guest INTEGER DEFAULT 10,
         allow_explicit INTEGER DEFAULT 1,
         auto_play INTEGER DEFAULT 1,
         show_queue_position INTEGER DEFAULT 1,
@@ -153,6 +153,8 @@ class QueuePlayDB {
       CREATE INDEX IF NOT EXISTS idx_queue_venue ON queue(venue_id, status, position);
       CREATE INDEX IF NOT EXISTS idx_guest_sessions_venue ON guest_sessions(venue_id, guest_id);
       CREATE INDEX IF NOT EXISTS idx_history_venue ON playback_history(venue_id, played_at);
+
+      ALTER TABLE venues ALTER COLUMN songs_per_guest SET DEFAULT 10;
     `);
 
     await this.seedSubscriptionPlans();
@@ -215,6 +217,15 @@ class QueuePlayDB {
   async getVenueBySlug(slug) {
     const { rows } = await this.pool.query('SELECT * FROM venues WHERE slug = $1 AND is_active = 1', [slug]);
     return rows[0] || null;
+  }
+
+  async slugExists(slug) {
+    const { rows } = await this.pool.query('SELECT 1 FROM venues WHERE slug = $1', [slug]);
+    return rows.length > 0;
+  }
+
+  async updateVenuePasswordHash(venueId, passwordHash) {
+    await this.pool.query('UPDATE venues SET admin_password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [passwordHash, venueId]);
   }
 
   async getVenueById(id) {
@@ -422,6 +433,8 @@ class QueuePlayDB {
   }
 
   async playNext(venueId) {
+    await this.pool.query("UPDATE queue SET status = 'played' WHERE venue_id = $1 AND status = 'playing'", [venueId]);
+
     const { rows } = await this.pool.query(
       "SELECT * FROM queue WHERE venue_id = $1 AND status = 'pending' ORDER BY position ASC LIMIT 1",
       [venueId]

@@ -32,10 +32,50 @@ const spotify = new SpotifyService(
   `${BASE_URL}/auth/spotify/callback`
 );
 
-function hashPassword(password) {
+const STATE_SECRET = process.env.SESSION_SECRET || process.env.SUPER_ADMIN_KEY || process.env.SALT || 'queueplay-state';
+
+// Legacy hashes were unsalted-per-user SHA-256; new ones are scrypt ("scrypt$salt$hash").
+function legacyHash(password) {
   return crypto.createHash('sha256').update(password + (process.env.SALT || 'queueplay-salt')).digest('hex');
 }
 
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `scrypt$${salt}$${hash}`;
+}
+
+function verifyPassword(password, stored) {
+  if (!stored) return false;
+  if (stored.startsWith('scrypt$')) {
+    const [, salt, hash] = stored.split('$');
+    const candidate = crypto.scryptSync(password, salt, 64);
+    const expected = Buffer.from(hash, 'hex');
+    return candidate.length === expected.length && crypto.timingSafeEqual(candidate, expected);
+  }
+  const candidate = Buffer.from(legacyHash(password));
+  const expected = Buffer.from(stored);
+  return candidate.length === expected.length && crypto.timingSafeEqual(candidate, expected);
+}
+
+// Signed OAuth state so a Spotify account can only be bound to the venue that started the flow.
+function signState(venueId) {
+  const ts = Date.now().toString(36);
+  const sig = crypto.createHmac('sha256', STATE_SECRET).update(`${venueId}.${ts}`).digest('hex').slice(0, 32);
+  return `${venueId}.${ts}.${sig}`;
+}
+
+function verifyState(state) {
+  const parts = (state || '').split('.');
+  if (parts.length !== 3) return null;
+  const [venueId, ts, sig] = parts;
+  const expected = crypto.createHmac('sha256', STATE_SECRET).update(`${venueId}.${ts}`).digest('hex').slice(0, 32);
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  if (Date.now() - parseInt(ts, 36) > 15 * 60 * 1000) return null;
+  return venueId;
+}
+
+app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json());
 app.use(cookieParser());
@@ -87,9 +127,19 @@ const venueClients = new Map();
 
 wss.on('connection', async (ws, req) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
-  const venueId = url.searchParams.get('venue');
+  const venueParam = url.searchParams.get('venue');
+  if (!venueParam) { ws.close(); return; }
 
-  if (!venueId) { ws.close(); return; }
+  let venueId;
+  try {
+    const venue = (await db.getVenueById(venueParam)) || (await db.getVenueBySlug(venueParam));
+    if (!venue) { ws.close(); return; }
+    venueId = venue.id;
+  } catch (error) {
+    console.error('[WS Resolve Error]', error.message);
+    ws.close();
+    return;
+  }
 
   if (!venueClients.has(venueId)) venueClients.set(venueId, new Set());
   venueClients.get(venueId).add(ws);
@@ -231,8 +281,8 @@ app.post('/api/venue/:venueSlug/queue', resolveVenue, async (req, res) => {
     }
 
     const songsToday = await db.getGuestSongsToday(venue.id, req.guestId);
-    const maxPerDay = plan.max_songs_per_day;
-    if (songsToday >= (venue.songs_per_guest || maxPerDay)) {
+    const maxPerDay = Math.min(venue.songs_per_guest || plan.max_songs_per_day, plan.max_songs_per_day);
+    if (songsToday >= maxPerDay) {
       return res.status(429).json({
         error: 'Daily limit reached',
         message: `You have reached your daily song limit`
@@ -322,8 +372,11 @@ app.get('/api/venue/:venueSlug/rate-limit', resolveVenue, async (req, res) => {
 app.post('/api/venue/:venueSlug/admin/login', resolveVenue, (req, res) => {
   const { password } = req.body;
   if (!password) return res.status(400).json({ error: 'Password required' });
-  if (hashPassword(password) !== req.venue.admin_password_hash) {
+  if (!verifyPassword(password, req.venue.admin_password_hash)) {
     return res.status(401).json({ error: 'Invalid password' });
+  }
+  if (!req.venue.admin_password_hash.startsWith('scrypt$')) {
+    db.updateVenuePasswordHash(req.venue.id, hashPassword(password)).catch(e => console.error('[Rehash Error]', e.message));
   }
   res.json({ success: true, adminKey: req.venue.admin_key, venue: { id: req.venue.id, slug: req.venue.slug, name: req.venue.name } });
 });
@@ -404,14 +457,16 @@ app.get('/auth/spotify/connect/:venueSlug', resolveVenue, (req, res) => {
       </div>
     `);
   }
-  const authUrl = spotify.getAuthUrl(req.venue.id);
+  const authUrl = spotify.getAuthUrl(signState(req.venue.id));
   res.redirect(authUrl);
 });
 
 app.get('/auth/spotify/callback', async (req, res) => {
   try {
-    const { code, state: venueId } = req.query;
-    if (!code || !venueId) return res.status(400).send('Missing auth code');
+    const { code, state, error: authError } = req.query;
+    if (authError) return res.redirect('/?spotify=denied');
+    const venueId = verifyState(state);
+    if (!code || !venueId) return res.status(400).send('Invalid or expired Spotify authorization. Please try connecting again from your dashboard.');
 
     const tokens = await spotify.exchangeCode(code);
     await db.updateVenueSpotifyTokens(venueId, tokens);
@@ -444,7 +499,7 @@ app.get('/api/venue/:venueSlug/spotify-token', resolveVenue, venueAdminAuth, asy
     }
 
     const expiresAt = new Date(venue.spotify_token_expires_at);
-    if (Date.now() >= expiresAt.getTime()) {
+    if (Date.now() >= expiresAt.getTime() - 60 * 1000) {
       const tokens = await spotify.refreshToken(venue.spotify_refresh_token);
       await db.updateVenueSpotifyTokens(venue.id, tokens);
       return res.json({ token: tokens.access_token });
@@ -452,7 +507,8 @@ app.get('/api/venue/:venueSlug/spotify-token', resolveVenue, venueAdminAuth, asy
 
     res.json({ token: venue.spotify_access_token });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to get Spotify token' });
+    console.error('[Spotify Token Error]', error.message);
+    res.status(500).json({ error: 'Failed to get Spotify token. Try reconnecting Spotify in the admin dashboard.' });
   }
 });
 
@@ -460,9 +516,11 @@ app.post('/api/register', async (req, res) => {
   try {
     const { name, type, email, password, slug } = req.body;
     if (!name || !password) return res.status(400).json({ error: 'Name and password required' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
     const desiredSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    const existing = await db.getVenueBySlug(desiredSlug);
+    if (!desiredSlug) return res.status(400).json({ error: 'Please choose a venue name with letters or numbers' });
+    const existing = await db.slugExists(desiredSlug);
     if (existing) return res.status(409).json({ error: 'This URL is already taken. Try a different name or custom URL.' });
 
     const result = await db.createVenue({
@@ -516,10 +574,17 @@ app.delete('/api/superadmin/venues/:id', superAdminAuth, async (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    version: '2.0.0',
+app.get('/api/health', async (req, res) => {
+  let database = 'ok';
+  try {
+    await db.pool.query('SELECT 1');
+  } catch (error) {
+    database = 'error';
+  }
+  res.status(database === 'ok' ? 200 : 503).json({
+    status: database === 'ok' ? 'ok' : 'degraded',
+    version: '2.1.0',
+    database,
     spotify: !!(process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET)
   });
 });
@@ -548,10 +613,17 @@ async function start() {
 
 start();
 
-process.on('SIGINT', async () => {
-  console.log('\n  Shutting down...');
-  await db.close();
-  server.close(() => process.exit(0));
-});
+async function shutdown(signal) {
+  console.log(`\n  ${signal} received, shutting down...`);
+  wss.clients.forEach(client => client.terminate());
+  server.close(async () => {
+    await db.close().catch(() => {});
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(0), 8000).unref();
+}
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 module.exports = app;
