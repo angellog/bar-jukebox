@@ -76,7 +76,7 @@ function verifyState(state) {
 }
 
 app.set('trust proxy', 1);
-app.use(cors());
+app.use(cors({ origin: false }));
 app.use(express.json());
 app.use(cookieParser());
 app.use('/assets', express.static(path.join(__dirname, '..', 'public', 'assets')));
@@ -110,10 +110,48 @@ async function resolveVenue(req, res, next) {
   }
 }
 
+// Admin sessions: signed, httpOnly cookie per venue ("qp_admin_<slug>"), valid 30 days.
+// The x-admin-key header still works for scripted/API access.
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+function sessionCookieName(slug) {
+  return `qp_admin_${slug}`;
+}
+
+function signSession(venueId) {
+  const exp = (Date.now() + SESSION_TTL_MS).toString(36);
+  const sig = crypto.createHmac('sha256', STATE_SECRET).update(`session.${venueId}.${exp}`).digest('hex');
+  return `${exp}.${sig}`;
+}
+
+function verifySession(token, venueId) {
+  const [exp, sig] = (token || '').split('.');
+  if (!exp || !sig) return false;
+  const expected = crypto.createHmac('sha256', STATE_SECRET).update(`session.${venueId}.${exp}`).digest('hex');
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return false;
+  return Date.now() < parseInt(exp, 36);
+}
+
+function setAdminSession(res, venue) {
+  res.cookie(sessionCookieName(venue.slug), signSession(venue.id), {
+    maxAge: SESSION_TTL_MS,
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: BASE_URL.startsWith('https://'),
+    path: '/'
+  });
+}
+
+function isVenueAdmin(req) {
+  if (!req.venue) return false;
+  const headerKey = req.headers['x-admin-key'];
+  if (headerKey && headerKey === req.venue.admin_key) return true;
+  return verifySession(req.cookies[sessionCookieName(req.venue.slug)], req.venue.id);
+}
+
 function venueAdminAuth(req, res, next) {
-  const adminKey = req.headers['x-admin-key'] || req.query.admin_key;
   if (!req.venue) return res.status(400).json({ error: 'Venue not resolved' });
-  if (adminKey !== req.venue.admin_key) return res.status(401).json({ error: 'Unauthorized' });
+  if (!isVenueAdmin(req)) return res.status(401).json({ error: 'Please log in again' });
   next();
 }
 
@@ -122,6 +160,23 @@ function superAdminAuth(req, res, next) {
   if (key !== process.env.SUPER_ADMIN_KEY) return res.status(401).json({ error: 'Unauthorized' });
   next();
 }
+
+// Returns a valid OAuth access token for the venue's connected Spotify account, refreshing if needed.
+async function getVenueSpotifyToken(venue) {
+  if (!venue.spotify_connected || !venue.spotify_refresh_token) return null;
+  const expiresAt = new Date(venue.spotify_token_expires_at).getTime();
+  if (venue.spotify_access_token && Date.now() < expiresAt - 60 * 1000) {
+    return venue.spotify_access_token;
+  }
+  const tokens = await spotify.refreshToken(venue.spotify_refresh_token);
+  await db.updateVenueSpotifyTokens(venue.id, tokens);
+  venue.spotify_access_token = tokens.access_token;
+  venue.spotify_refresh_token = tokens.refresh_token;
+  venue.spotify_token_expires_at = tokens.expires_at;
+  return tokens.access_token;
+}
+
+const NOT_CONNECTED_MSG = "This venue hasn't connected Spotify yet. Ask the staff to connect it in the admin dashboard.";
 
 const venueClients = new Map();
 
@@ -239,7 +294,17 @@ app.get('/api/venue/:venueSlug/search', resolveVenue, async (req, res) => {
       return res.status(503).json({ error: 'Spotify API not configured' });
     }
 
-    let results = await spotify.search(q);
+    const userToken = await getVenueSpotifyToken(req.venue).catch(e => {
+      console.error('[Spotify Refresh Error]', e.message);
+      return null;
+    });
+    let results;
+    try {
+      results = await spotify.search(q, 10, userToken);
+    } catch (error) {
+      if (error.status === 403 && !userToken) return res.status(503).json({ error: NOT_CONNECTED_MSG });
+      throw error;
+    }
 
     if (!req.venue.allow_explicit) {
       results = results.filter(r => !r.explicit);
@@ -248,7 +313,7 @@ app.get('/api/venue/:venueSlug/search', resolveVenue, async (req, res) => {
     res.json({ results });
   } catch (error) {
     console.error('[Search Error]', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(502).json({ error: 'Search is unavailable right now. Please try again.' });
   }
 });
 
@@ -289,7 +354,14 @@ app.post('/api/venue/:venueSlug/queue', resolveVenue, async (req, res) => {
       });
     }
 
-    const song = await spotify.getTrack(songId);
+    const userToken = await getVenueSpotifyToken(venue).catch(() => null);
+    let song;
+    try {
+      song = await spotify.getTrack(songId, userToken);
+    } catch (error) {
+      if (error.status === 403 && !userToken) return res.status(503).json({ error: NOT_CONNECTED_MSG });
+      throw error;
+    }
     song.addedBy = req.guestId;
     song.guestName = guestName || '';
 
@@ -317,7 +389,8 @@ app.post('/api/venue/:venueSlug/queue', resolveVenue, async (req, res) => {
     });
   } catch (error) {
     console.error('[Queue Add Error]', error.message);
-    res.status(error.message.includes('already in the queue') || error.message.includes('full') ? 409 : 500).json({ error: error.message });
+    const code = error.message.includes('already in the queue') || error.message.includes('full') ? 409 : 500;
+    res.status(code).json({ error: code === 409 ? error.message : 'Could not add that song. Please try again.' });
   }
 });
 
@@ -378,7 +451,17 @@ app.post('/api/venue/:venueSlug/admin/login', resolveVenue, (req, res) => {
   if (!req.venue.admin_password_hash.startsWith('scrypt$')) {
     db.updateVenuePasswordHash(req.venue.id, hashPassword(password)).catch(e => console.error('[Rehash Error]', e.message));
   }
-  res.json({ success: true, adminKey: req.venue.admin_key, venue: { id: req.venue.id, slug: req.venue.slug, name: req.venue.name } });
+  setAdminSession(res, req.venue);
+  res.json({ success: true, venue: { id: req.venue.id, slug: req.venue.slug, name: req.venue.name } });
+});
+
+app.post('/api/venue/:venueSlug/admin/logout', resolveVenue, (req, res) => {
+  res.clearCookie(sessionCookieName(req.venue.slug), { path: '/' });
+  res.json({ success: true });
+});
+
+app.get('/api/venue/:venueSlug/admin/session', resolveVenue, (req, res) => {
+  res.json({ authenticated: isVenueAdmin(req) });
 });
 
 app.get('/api/venue/:venueSlug/admin/stats', resolveVenue, venueAdminAuth, async (req, res) => {
@@ -440,6 +523,7 @@ app.get('/api/venue/:venueSlug/admin/full', resolveVenue, venueAdminAuth, async 
 });
 
 app.get('/auth/spotify/connect/:venueSlug', resolveVenue, (req, res) => {
+  if (!isVenueAdmin(req)) return res.redirect(`/admin/${req.venue.slug}`);
   if (!process.env.SPOTIFY_CLIENT_ID || !process.env.SPOTIFY_CLIENT_SECRET) {
     return res.send(`
       <div style="font-family: sans-serif; max-width: 500px; margin: 5rem auto; padding: 2rem; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); background-color: #121212; color: #fff;">
@@ -498,14 +582,7 @@ app.get('/api/venue/:venueSlug/spotify-token', resolveVenue, venueAdminAuth, asy
       return res.status(400).json({ error: 'Spotify not connected' });
     }
 
-    const expiresAt = new Date(venue.spotify_token_expires_at);
-    if (Date.now() >= expiresAt.getTime() - 60 * 1000) {
-      const tokens = await spotify.refreshToken(venue.spotify_refresh_token);
-      await db.updateVenueSpotifyTokens(venue.id, tokens);
-      return res.json({ token: tokens.access_token });
-    }
-
-    res.json({ token: venue.spotify_access_token });
+    res.json({ token: await getVenueSpotifyToken(venue) });
   } catch (error) {
     console.error('[Spotify Token Error]', error.message);
     res.status(500).json({ error: 'Failed to get Spotify token. Try reconnecting Spotify in the admin dashboard.' });
@@ -531,12 +608,12 @@ app.post('/api/register', async (req, res) => {
       password_hash: hashPassword(password)
     });
 
+    setAdminSession(res, { id: result.id, slug: result.slug });
     res.json({
       success: true,
       venue: {
         id: result.id,
         slug: result.slug,
-        adminKey: result.adminKey,
         guestUrl: `${BASE_URL}/v/${result.slug}`,
         adminUrl: `${BASE_URL}/admin/${result.slug}`,
         playerUrl: `${BASE_URL}/player/${result.slug}`

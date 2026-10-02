@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "check": "node --check src/server.js && node --check src/database.js && node --check src/spotify.js"
+    "check": "node --check src/server.js && node --check src/database.js && node --check src/spotify.js",
+    "smoke": "node scripts/smoke-test.js"
   },
   "keywords": [
     "jukebox",

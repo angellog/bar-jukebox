@@ -2,6 +2,14 @@
 // SPOTIFY SERVICE - OAuth + Search + Playback
 // ============================================
 
+async function spotifyError(prefix, response) {
+  const body = await response.json().catch(() => ({}));
+  const detail = body.error?.message || body.error_description || response.statusText;
+  const err = new Error(`${prefix} (Spotify ${response.status}: ${detail})`);
+  err.status = response.status;
+  return err;
+}
+
 class SpotifyService {
   constructor(clientId, clientSecret, redirectUri) {
     this.clientId = clientId;
@@ -122,21 +130,23 @@ class SpotifyService {
   // SEARCH
   // ============================================
 
-  async search(query, limit = 10) {
-    const token = await this.getClientToken();
+  // userToken: a venue's OAuth token. Spotify Development Mode apps can no longer
+  // use client-credentials tokens for metadata (403), so prefer the user token.
+  async search(query, limit = 10, userToken = null) {
+    const token = userToken || await this.getClientToken();
 
     const params = new URLSearchParams({
       q: query,
       type: 'track',
       limit: String(limit),
-      market: 'US'
+      market: userToken ? 'from_token' : 'US'
     });
 
     const response = await fetch(`https://api.spotify.com/v1/search?${params}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
 
-    if (!response.ok) throw new Error('Search failed');
+    if (!response.ok) throw await spotifyError('Search failed', response);
 
     const data = await response.json();
     return data.tracks.items.map(track => ({
@@ -154,13 +164,14 @@ class SpotifyService {
     }));
   }
 
-  async getTrack(trackId) {
-    const token = await this.getClientToken();
-    const response = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+  async getTrack(trackId, userToken = null) {
+    const token = userToken || await this.getClientToken();
+    const market = userToken ? '?market=from_token' : '';
+    const response = await fetch(`https://api.spotify.com/v1/tracks/${encodeURIComponent(trackId)}${market}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
 
-    if (!response.ok) throw new Error('Failed to fetch track');
+    if (!response.ok) throw await spotifyError('Failed to fetch track', response);
 
     const track = await response.json();
     return {

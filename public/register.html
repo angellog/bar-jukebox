@@ -128,7 +128,7 @@
         <div class="success-panel">
           <div class="success-icon">&#x1F389;</div>
           <h2 class="qp-h3">Your venue is live!</h2>
-          <p class="qp-text-secondary qp-text-sm qp-mt-sm">Save these links. You'll need them to manage your jukebox.</p>
+          <p class="qp-text-secondary qp-text-sm qp-mt-sm">You're signed in. Log in to the dashboard any time with your venue password.</p>
 
           <div class="success-urls">
             <div class="success-url">
@@ -137,15 +137,11 @@
             </div>
             <div class="success-url">
               <div class="success-url-label">Admin dashboard</div>
-              <div class="success-url-value"><a id="adminUrl" href="#" target="_blank"></a></div>
+              <div class="success-url-value"><a id="adminUrl" href="#"></a></div>
             </div>
             <div class="success-url">
               <div class="success-url-label">Player (open on your speaker device)</div>
               <div class="success-url-value"><a id="playerUrl" href="#" target="_blank"></a></div>
-            </div>
-            <div class="success-url">
-              <div class="success-url-label">Admin key (save this!)</div>
-              <div class="success-url-value" id="adminKeyDisplay"></div>
             </div>
           </div>
 
@@ -218,7 +214,6 @@
         document.getElementById('adminUrl').href = data.venue.adminUrl;
         document.getElementById('playerUrl').textContent = data.venue.playerUrl;
         document.getElementById('playerUrl').href = data.venue.playerUrl;
-        document.getElementById('adminKeyDisplay').textContent = data.venue.adminKey;
         document.getElementById('goAdminBtn').href = data.venue.adminUrl;
       } catch (err) {
         errorMsg.textContent = err.message;

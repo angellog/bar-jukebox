@@ -346,7 +346,7 @@
 
   <script>
     const slug = window.location.pathname.split('/').pop();
-    let adminKey = localStorage.getItem(`qp_admin_key_${slug}`);
+    localStorage.removeItem(`qp_admin_key_${slug}`); // legacy
     let venue = null;
 
     // Toast manager
@@ -389,8 +389,6 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
 
-        adminKey = data.adminKey;
-        localStorage.setItem(`qp_admin_key_${slug}`, adminKey);
         initDashboard();
       } catch (err) {
         const errBox = document.getElementById('loginError');
@@ -400,15 +398,26 @@
     });
 
     // Logout
-    document.getElementById('logoutBtn').addEventListener('click', () => {
-      localStorage.removeItem(`qp_admin_key_${slug}`);
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await fetch(`/api/venue/${slug}/admin/logout`, { method: 'POST' }).catch(() => {});
       location.reload();
     });
+
+    // Any 401 from an admin call means the session expired: back to login.
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = async (...args) => {
+      const res = await nativeFetch(...args);
+      if (res.status === 401 && String(args[0]).includes('/admin/') && !String(args[0]).endsWith('/admin/login')) {
+        document.getElementById('dashboardSection').classList.add('qp-hidden');
+        document.getElementById('loginSection').classList.remove('qp-hidden');
+      }
+      return res;
+    };
 
     // Skip
     document.getElementById('skipBtn').addEventListener('click', async () => {
       try {
-        const res = await fetch(`/api/venue/${slug}/play-next?admin_key=${adminKey}`, { method: 'POST' });
+        const res = await fetch(`/api/venue/${slug}/play-next`, { method: 'POST' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         showToast('skipped track');
@@ -422,7 +431,7 @@
     document.getElementById('clearQueueBtn').addEventListener('click', async () => {
       if (!confirm('Are you sure you want to clear the entire queue?')) return;
       try {
-        const res = await fetch(`/api/venue/${slug}/admin/clear-queue?admin_key=${adminKey}`, { method: 'POST' });
+        const res = await fetch(`/api/venue/${slug}/admin/clear-queue`, { method: 'POST' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         showToast('Queue cleared');
@@ -435,7 +444,7 @@
     // Reset Cooldowns
     document.getElementById('resetLimitsBtn').addEventListener('click', async () => {
       try {
-        const res = await fetch(`/api/venue/${slug}/admin/reset-limits?admin_key=${adminKey}`, { method: 'POST' });
+        const res = await fetch(`/api/venue/${slug}/admin/reset-limits`, { method: 'POST' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         showToast('Guest request cooldowns reset');
@@ -461,7 +470,7 @@
       };
 
       try {
-        const res = await fetch(`/api/venue/${slug}/admin/branding?admin_key=${adminKey}`, {
+        const res = await fetch(`/api/venue/${slug}/admin/branding`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -487,7 +496,7 @@
       };
 
       try {
-        const res = await fetch(`/api/venue/${slug}/admin/config?admin_key=${adminKey}`, {
+        const res = await fetch(`/api/venue/${slug}/admin/config`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -504,7 +513,7 @@
     async function loadStats() {
       try {
         const [statsRes, npRes] = await Promise.all([
-          fetch(`/api/venue/${slug}/admin/stats?admin_key=${adminKey}`),
+          fetch(`/api/venue/${slug}/admin/stats`),
           fetch(`/api/venue/${slug}/now-playing`)
         ]);
         const data = await statsRes.json();
@@ -578,7 +587,7 @@
         document.querySelectorAll('.remove-item-btn').forEach(btn => {
           btn.addEventListener('click', async () => {
             try {
-              const res = await fetch(`/api/venue/${slug}/queue/${btn.dataset.id}?admin_key=${adminKey}`, { method: 'DELETE' });
+              const res = await fetch(`/api/venue/${slug}/queue/${btn.dataset.id}`, { method: 'DELETE' });
               if (!res.ok) throw new Error('Failed to remove item');
               showToast('Song removed from queue');
               loadQueue();
@@ -594,7 +603,7 @@
 
     async function loadBrandingAndConfig() {
       try {
-        const res = await fetch(`/api/venue/${slug}/admin/full?admin_key=${adminKey}`);
+        const res = await fetch(`/api/venue/${slug}/admin/full`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
 
@@ -628,7 +637,7 @@
 
         // Rules config
         document.getElementById('configRateLimit').value = venue.rate_limit_minutes || 5;
-        document.getElementById('configSongsPerGuest').value = venue.songs_per_guest || 1;
+        document.getElementById('configSongsPerGuest').value = venue.songs_per_guest || 10;
         document.getElementById('configMaxQueue').value = venue.max_queue_size || 20;
         document.getElementById('configAllowExplicit').value = venue.allow_explicit;
         document.getElementById('configAutoPlay').checked = venue.auto_play !== 0;
@@ -696,16 +705,18 @@
       await loadQueue();
 
       // Refresh stats regularly
-      setInterval(() => {
+      if (window.__qpRefresh) clearInterval(window.__qpRefresh);
+      window.__qpRefresh = setInterval(() => {
         loadStats();
         loadQueue();
       }, 10000);
     }
 
-    // Check auth
-    if (adminKey) {
-      initDashboard();
-    }
+    // Restore session if the cookie is still valid
+    fetch(`/api/venue/${slug}/admin/session`)
+      .then(r => r.json())
+      .then(d => { if (d.authenticated) initDashboard(); })
+      .catch(() => {});
   </script>
 </body>
 </html>

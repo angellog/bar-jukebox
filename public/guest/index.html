@@ -475,8 +475,7 @@
 
           renderSearchResults(data.results);
         } catch (err) {
-          showToast(err.message, 'error');
-          searchResults.innerHTML = `<div class="qp-text-center qp-text-muted qp-mt-md qp-text-sm">❌ Search failed. Check Spotify connections.</div>`;
+          searchResults.innerHTML = `<div class="qp-text-center qp-text-muted qp-mt-md qp-text-sm">${escapeHTML(err.message)}</div>`;
         }
       }, 350);
     });

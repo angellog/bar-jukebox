@@ -32,10 +32,21 @@ The Railway project `queueplay-jukebox` has two services: `queueplay-jukebox` (t
 
 Required variables: `DATABASE_URL` (reference `${{Postgres.DATABASE_URL}}`), `BASE_URL`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SUPER_ADMIN_KEY`, `SALT`. Health check: `GET /api/health`.
 
+**Spotify Development Mode (since Mar 2026):** client-credentials tokens can no longer search, so guest search runs on the venue's connected Spotify account. A venue must connect Spotify before guests can search. The app owner's account needs Premium, and only 5 Spotify users can connect until Spotify grants extended quota.
+
 In the Spotify developer dashboard, the redirect URI must be exactly `${BASE_URL}/auth/spotify/callback`. While the Spotify app is in **Development mode**, only Spotify users added under *User Management* can connect; apply for extended quota before onboarding real venues.
+
+## Testing
+
+```bash
+npm run smoke -- http://localhost:3000                       # read-only checks
+SUPER_ADMIN_KEY=... npm run smoke -- <url>                    # also registers, exercises, then deletes a test venue
+```
 
 ## Security notes
 
+- Venue staff log in with their password; the server sets a signed, httpOnly session cookie (30 days). No admin key to copy around. `x-admin-key` header still works for scripts.
+- Connecting Spotify requires an admin session.
 - Venue admin passwords use scrypt (legacy SHA-256 hashes are upgraded on next login).
 - Spotify OAuth `state` is HMAC-signed and expires after 15 minutes.
 - Guests are rate-limited per venue by cookie (cooldown + daily cap, both capped by plan).

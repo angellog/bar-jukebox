@@ -40,7 +40,7 @@
 </head>
 <body>
   <!-- AUTHORIZE GATE -->
-  <div id="authGate" class="qp-container-sm qp-mt-xl">
+  <div id="authGate" class="qp-container-sm qp-mt-xl qp-hidden">
     <div class="qp-card">
       <h1 class="qp-h3 qp-text-center qp-mb-md">🎵 Venue Player</h1>
       <form id="authForm">
@@ -102,8 +102,7 @@
   <script src="https://sdk.scdn.co/spotify-player.js"></script>
   <script>
     const slug = window.location.pathname.split('/').filter(Boolean).pop();
-    const KEY_STORAGE = `qp_player_key_${slug}`;
-    let adminKey = localStorage.getItem(KEY_STORAGE);
+    localStorage.removeItem(`qp_player_key_${slug}`); // legacy
     let spotifyPlayer = null;
     let deviceId = null;
     let sdkReady = false;
@@ -137,12 +136,9 @@
     function setStatus(html) { $('spotifyStatusText').innerHTML = html; }
 
     async function api(path, options = {}) {
-      const sep = path.includes('?') ? '&' : '?';
-      const res = await fetch(`/api/venue/${slug}${path}${sep}admin_key=${encodeURIComponent(adminKey)}`, options);
+      const res = await fetch(`/api/venue/${slug}${path}`, options);
       const data = await res.json().catch(() => ({}));
       if (res.status === 401) {
-        localStorage.removeItem(KEY_STORAGE);
-        adminKey = null;
         show('authGate');
         throw new Error('Session expired. Enter the admin password again.');
       }
@@ -167,8 +163,6 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Invalid password');
-        adminKey = data.adminKey;
-        localStorage.setItem(KEY_STORAGE, adminKey);
         show('startGate');
       } catch (err) {
         showToast(err.message, 'error');
@@ -178,9 +172,8 @@
       }
     });
 
-    $('logoutBtn').addEventListener('click', () => {
-      localStorage.removeItem(KEY_STORAGE);
-      adminKey = null;
+    $('logoutBtn').addEventListener('click', async () => {
+      await fetch(`/api/venue/${slug}/admin/logout`, { method: 'POST' }).catch(() => {});
       show('authGate');
     });
 
@@ -383,7 +376,10 @@
       document.title = `${song.title} · QueuePlay`;
     }
 
-    show(adminKey ? 'startGate' : 'authGate');
+    fetch(`/api/venue/${slug}/admin/session`)
+      .then(r => r.json())
+      .then(d => show(d.authenticated ? 'startGate' : 'authGate'))
+      .catch(() => show('authGate'));
   </script>
 </body>
 </html>
