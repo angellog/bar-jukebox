@@ -155,6 +155,19 @@ class QueuePlayDB {
       CREATE INDEX IF NOT EXISTS idx_history_venue ON playback_history(venue_id, played_at);
 
       ALTER TABLE venues ALTER COLUMN songs_per_guest SET DEFAULT 10;
+
+      -- Server-driven playback ("speaker mode") and background music (v1.1)
+      ALTER TABLE venues ADD COLUMN IF NOT EXISTS playback_mode TEXT NOT NULL DEFAULT 'browser';
+      ALTER TABLE venues ADD COLUMN IF NOT EXISTS playback_device_id TEXT;
+      ALTER TABLE venues ADD COLUMN IF NOT EXISTS playback_device_name TEXT;
+      ALTER TABLE venues ADD COLUMN IF NOT EXISTS engine_running INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE venues ADD COLUMN IF NOT EXISTS autofill_enabled INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE venues ADD COLUMN IF NOT EXISTS autofill_source TEXT NOT NULL DEFAULT 'genre';
+      ALTER TABLE venues ADD COLUMN IF NOT EXISTS autofill_genres TEXT;
+      ALTER TABLE venues ADD COLUMN IF NOT EXISTS autofill_playlist_uri TEXT;
+      ALTER TABLE venues ADD COLUMN IF NOT EXISTS autofill_playlist_name TEXT;
+      ALTER TABLE now_playing ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'guest';
+      ALTER TABLE now_playing ADD COLUMN IF NOT EXISTS queue_id INTEGER;
     `);
 
     await this.seedSubscriptionPlans();
@@ -450,6 +463,47 @@ class QueuePlayDB {
     return null;
   }
 
+  // Marks queue item `queueId` as the one playing (any previous one becomes played).
+  async playQueueItem(venueId, queueId) {
+    await this.pool.query("UPDATE queue SET status = 'played' WHERE venue_id = $1 AND status = 'playing' AND id <> $2", [venueId, queueId]);
+    const { rows } = await this.pool.query(
+      "UPDATE queue SET status = 'playing' WHERE id = $1 AND venue_id = $2 RETURNING *",
+      [queueId, venueId]
+    );
+    if (!rows[0]) return null;
+    await this.setNowPlaying(venueId, { ...rows[0], source: 'guest', queue_id: rows[0].id });
+    return rows[0];
+  }
+
+  // Background (non-guest) track is playing: close out any guest song and record it.
+  async setBackgroundPlaying(venueId, track) {
+    await this.pool.query("UPDATE queue SET status = 'played' WHERE venue_id = $1 AND status = 'playing'", [venueId]);
+    await this.setNowPlaying(venueId, { ...track, added_by: 'background', source: 'background', queue_id: null });
+  }
+
+  async updateVenuePlayback(venueId, fields) {
+    const allowed = [
+      'playback_mode', 'playback_device_id', 'playback_device_name', 'engine_running',
+      'autofill_enabled', 'autofill_source', 'autofill_genres', 'autofill_playlist_uri', 'autofill_playlist_name'
+    ];
+    const sets = [];
+    const values = [];
+    for (const key of allowed) {
+      if (fields[key] !== undefined) {
+        values.push(fields[key]);
+        sets.push(`${key} = $${values.length}`);
+      }
+    }
+    if (!sets.length) return;
+    values.push(venueId);
+    await this.pool.query(`UPDATE venues SET ${sets.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${values.length}`, values);
+  }
+
+  async getRunningVenueIds() {
+    const { rows } = await this.pool.query('SELECT id FROM venues WHERE engine_running = 1 AND spotify_connected = 1 AND is_active = 1');
+    return rows.map(r => r.id);
+  }
+
   async getNowPlaying(venueId) {
     const { rows } = await this.pool.query('SELECT * FROM now_playing WHERE venue_id = $1', [venueId]);
     return rows[0] || null;
@@ -457,8 +511,8 @@ class QueuePlayDB {
 
   async setNowPlaying(venueId, song) {
     await this.pool.query(
-      `INSERT INTO now_playing (venue_id, song_id, title, artist, album, album_art, preview_url, spotify_uri, duration_ms, started_at, added_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, $10)
+      `INSERT INTO now_playing (venue_id, song_id, title, artist, album, album_art, preview_url, spotify_uri, duration_ms, started_at, added_by, source, queue_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, $10, $11, $12)
        ON CONFLICT (venue_id)
        DO UPDATE SET
          song_id = EXCLUDED.song_id,
@@ -470,14 +524,18 @@ class QueuePlayDB {
          spotify_uri = EXCLUDED.spotify_uri,
          duration_ms = EXCLUDED.duration_ms,
          started_at = CURRENT_TIMESTAMP,
-         added_by = EXCLUDED.added_by`,
+         added_by = EXCLUDED.added_by,
+         source = EXCLUDED.source,
+         queue_id = EXCLUDED.queue_id`,
       [
         venueId, song.song_id || song.id, song.title, song.artist,
         song.album || '', song.album_art || song.albumArt || '',
         song.preview_url || song.previewUrl || '',
         song.spotify_uri || song.uri || '',
         song.duration_ms || song.durationMs || 0,
-        song.added_by || song.addedBy || 'anonymous'
+        song.added_by || song.addedBy || 'anonymous',
+        song.source || 'guest',
+        song.queue_id || (song.source === 'background' ? null : song.id) || null
       ]
     );
 

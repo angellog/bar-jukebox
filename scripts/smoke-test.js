@@ -145,6 +145,23 @@ async function main() {
     // restore a cooldown so the queue tests below exercise it
     await stranger(`/api/venue/${slug}/admin/config`, { method: 'PUT', body: { rate_limit_minutes: 5 } });
 
+    // Music settings (speaker + background music)
+    const af = await stranger(`/api/venue/${slug}/admin/autofill`, { method: 'PUT', body: { enabled: true, source: 'genre', genres: ['Afrobeats', 'amapiano'] } });
+    const music = await stranger(`/api/venue/${slug}/admin/music`);
+    check('save background music (genre mix)', af.status === 200 && music.json?.autofill?.enabled === true && music.json.autofill.genres.join(',') === 'afrobeats,amapiano');
+    const pl = await stranger(`/api/venue/${slug}/admin/autofill`, { method: 'PUT', body: { source: 'playlist', playlist: 'https://open.spotify.com/playlist/37i9dQZF1DX4WYpdgoIcn6?si=x' } });
+    const music2 = await stranger(`/api/venue/${slug}/admin/music`);
+    check('save background playlist from a link', pl.status === 200 && music2.json?.autofill?.playlistUri === 'spotify:playlist:37i9dQZF1DX4WYpdgoIcn6');
+    const badPl = await stranger(`/api/venue/${slug}/admin/autofill`, { method: 'PUT', body: { source: 'playlist', playlist: 'not a link' } });
+    check('reject invalid playlist link', badPl.status === 400);
+    const dev = await stranger(`/api/venue/${slug}/admin/playback`, { method: 'PUT', body: { mode: 'device', deviceId: 'abc123', deviceName: 'Bar Sonos' } });
+    const music3 = await stranger(`/api/venue/${slug}/admin/music`);
+    check('save Spotify speaker', dev.status === 200 && music3.json?.playback?.mode === 'device' && music3.json.playback.deviceName === 'Bar Sonos');
+    const startNoSpotify = await stranger(`/api/venue/${slug}/admin/music/start`, { method: 'POST' });
+    check('start music without Spotify connected fails cleanly', startNoSpotify.status >= 400 && startNoSpotify.status < 600 && !!startNoSpotify.json?.error, startNoSpotify.json?.error);
+    const strangerMusic = await anon(`/api/venue/${slug}/admin/music/start`, { method: 'POST' });
+    check('strangers cannot control music', strangerMusic.status === 401);
+
     const strangerCfg = await anon(`/api/venue/${slug}/admin/config`, { method: 'PUT', body: { rate_limit_minutes: 0 } });
     check('strangers cannot change limits', strangerCfg.status === 401);
 

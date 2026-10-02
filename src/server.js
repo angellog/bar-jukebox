@@ -11,6 +11,7 @@ const QRCode = require('qrcode');
 
 const QueuePlayDB = require('./database');
 const SpotifyService = require('./spotify');
+const { PlaybackEngine, GENRES, VENUE_PRESETS, defaultGenres } = require('./engine');
 
 const app = express();
 const server = http.createServer(app);
@@ -162,10 +163,10 @@ function superAdminAuth(req, res, next) {
 }
 
 // Returns a valid OAuth access token for the venue's connected Spotify account, refreshing if needed.
-async function getVenueSpotifyToken(venue) {
+async function getVenueSpotifyToken(venue, { force = false } = {}) {
   if (!venue.spotify_connected || !venue.spotify_refresh_token) return null;
   const expiresAt = new Date(venue.spotify_token_expires_at).getTime();
-  if (venue.spotify_access_token && Date.now() < expiresAt - 60 * 1000) {
+  if (!force && venue.spotify_access_token && Date.now() < expiresAt - 60 * 1000) {
     return venue.spotify_access_token;
   }
   const tokens = await spotify.refreshToken(venue.spotify_refresh_token);
@@ -191,6 +192,17 @@ function clampInt(value, min, max) {
 
 const venueClients = new Map();
 const venuePlayers = new Map();
+
+const engine = new PlaybackEngine({
+  db,
+  spotify,
+  getToken: async (venue, opts) => {
+    const token = await getVenueSpotifyToken(venue, opts);
+    if (!token) throw Object.assign(new Error('Spotify not connected'), { status: 400 });
+    return token;
+  },
+  broadcast: (venueId, type, data) => broadcastToVenue(venueId, type, data)
+});
 
 function parseCookies(header) {
   const out = {};
@@ -439,11 +451,7 @@ app.post('/api/venue/:venueSlug/queue', resolveVenue, async (req, res) => {
     const queue = await db.getQueue(venue.id);
     broadcastToVenue(venue.id, 'queue_updated', { queue });
 
-    if (venue.auto_play && venue.spotify_connected) {
-      await withVenueLock(venue.id, async () => {
-        if (!(await db.getNowPlaying(venue.id))) await advanceVenue(venue.id);
-      });
-    }
+    engine.nudge(venue.id);
 
     res.json({
       success: true,
@@ -482,6 +490,15 @@ app.get('/api/venue/:venueSlug/now-playing', resolveVenue, async (req, res) => {
 app.post('/api/venue/:venueSlug/play-next', resolveVenue, venueAdminAuth, async (req, res) => {
   const venueId = req.venue.id;
   const expected = req.body && typeof req.body.current === 'string' ? req.body.current : null;
+  if (engine.status(venueId).running) {
+    try {
+      await engine.skip(venueId);
+      return res.json({ success: true, advanced: true, nowPlaying: await db.getNowPlaying(venueId) });
+    } catch (error) {
+      console.error('[Skip Error]', error.message);
+      return res.status(502).json({ error: 'Spotify could not skip right now' });
+    }
+  }
   try {
     const result = await withVenueLock(venueId, async () => {
       if (expected !== null) {
@@ -646,11 +663,6 @@ app.get('/auth/spotify/callback', async (req, res) => {
 
     const venue = await db.getVenueById(venueId);
 
-    if (venue && venue.auto_play) {
-      await withVenueLock(venue.id, async () => {
-        if (!(await db.getNowPlaying(venue.id))) await advanceVenue(venue.id);
-      });
-    }
 
     const slug = venue ? venue.slug : '';
     const backToPlayer = req.cookies.qp_oauth_return === 'player';
@@ -673,6 +685,144 @@ app.get('/api/venue/:venueSlug/spotify-token', resolveVenue, venueAdminAuth, asy
   } catch (error) {
     console.error('[Spotify Token Error]', error.message);
     res.status(500).json({ error: 'Failed to get Spotify token. Try reconnecting Spotify in the admin dashboard.' });
+  }
+});
+
+// ============================================
+// MUSIC: speaker (device) selection, background music, transport controls
+// ============================================
+
+async function venueToken(req, res) {
+  try {
+    const token = await getVenueSpotifyToken(req.venue);
+    if (!token) res.status(400).json({ error: 'Connect Spotify first' });
+    return token;
+  } catch (error) {
+    res.status(502).json({ error: 'Could not reach Spotify. Try reconnecting Spotify.' });
+    return null;
+  }
+}
+
+app.get('/api/venue/:venueSlug/admin/music', resolveVenue, venueAdminAuth, (req, res) => {
+  const v = req.venue;
+  res.json({
+    status: engine.status(v.id),
+    playback: { mode: v.playback_mode, deviceId: v.playback_device_id, deviceName: v.playback_device_name },
+    autofill: {
+      enabled: !!v.autofill_enabled,
+      source: v.autofill_source,
+      genres: (v.autofill_genres || '').split(',').map(g => g.trim()).filter(Boolean),
+      defaultGenres: defaultGenres(v.type),
+      playlistUri: v.autofill_playlist_uri,
+      playlistName: v.autofill_playlist_name
+    },
+    genreOptions: GENRES,
+    venueType: v.type
+  });
+});
+
+app.get('/api/venue/:venueSlug/admin/devices', resolveVenue, venueAdminAuth, async (req, res) => {
+  const token = await venueToken(req, res);
+  if (!token) return;
+  try {
+    const devices = await spotify.getDevices(token);
+    res.json({ devices: devices.map(d => ({ id: d.id, name: d.name, type: d.type, active: d.is_active, restricted: d.is_restricted, volume: d.volume_percent })) });
+  } catch (error) {
+    console.error('[Devices Error]', error.message);
+    res.status(502).json({ error: 'Could not load Spotify devices' });
+  }
+});
+
+app.put('/api/venue/:venueSlug/admin/playback', resolveVenue, venueAdminAuth, async (req, res) => {
+  const { mode, deviceId, deviceName } = req.body || {};
+  if (!['browser', 'device'].includes(mode)) return res.status(400).json({ error: 'mode must be browser or device' });
+  if (mode === 'device' && !deviceId) return res.status(400).json({ error: 'Choose a device' });
+  await db.updateVenuePlayback(req.venue.id, {
+    playback_mode: mode,
+    playback_device_id: mode === 'device' ? String(deviceId) : null,
+    playback_device_name: mode === 'device' ? String(deviceName || 'Spotify device').slice(0, 100) : null
+  });
+  res.json({ success: true });
+});
+
+app.put('/api/venue/:venueSlug/admin/autofill', resolveVenue, venueAdminAuth, async (req, res) => {
+  const b = req.body || {};
+  const fields = {};
+  if (b.enabled !== undefined) fields.autofill_enabled = b.enabled ? 1 : 0;
+  if (b.source !== undefined) {
+    if (!['genre', 'playlist'].includes(b.source)) return res.status(400).json({ error: 'source must be genre or playlist' });
+    fields.autofill_source = b.source;
+  }
+  if (Array.isArray(b.genres)) {
+    fields.autofill_genres = b.genres.map(g => String(g).trim().toLowerCase()).filter(Boolean).slice(0, 8).join(',');
+  }
+  if (b.playlist !== undefined) {
+    const raw = String(b.playlist || '').trim();
+    if (!raw) {
+      fields.autofill_playlist_uri = null;
+      fields.autofill_playlist_name = null;
+    } else {
+      const m = raw.match(/playlist[/:]([A-Za-z0-9]{10,})/);
+      if (!m) return res.status(400).json({ error: 'Paste a Spotify playlist link (open.spotify.com/playlist/...)' });
+      const uri = `spotify:playlist:${m[1]}`;
+      let name = b.playlistName || null;
+      const token = await getVenueSpotifyToken(req.venue).catch(() => null);
+      if (token && !name) {
+        name = await spotify.getPlaylist(token, m[1]).then(p => p.name).catch(() => null);
+      }
+      fields.autofill_playlist_uri = uri;
+      fields.autofill_playlist_name = name || 'Spotify playlist';
+    }
+  }
+  await db.updateVenuePlayback(req.venue.id, fields);
+  engine.nudge(req.venue.id);
+  res.json({ success: true });
+});
+
+app.get('/api/venue/:venueSlug/admin/playlists', resolveVenue, venueAdminAuth, async (req, res) => {
+  const token = await venueToken(req, res);
+  if (!token) return;
+  try {
+    res.json({ playlists: await spotify.getMyPlaylists(token) });
+  } catch (error) {
+    const reconnect = error.status === 401 || error.status === 403;
+    res.status(reconnect ? 403 : 502).json({
+      error: reconnect ? 'Reconnect Spotify to let QueuePlay read your playlists' : 'Could not load playlists'
+    });
+  }
+});
+
+app.post('/api/venue/:venueSlug/admin/music/:action', resolveVenue, venueAdminAuth, async (req, res) => {
+  const id = req.venue.id;
+  try {
+    switch (req.params.action) {
+      case 'start': await engine.start(id); break;
+      case 'stop': await engine.stop(id); break;
+      case 'pause': await engine.pause(id); break;
+      case 'resume': await engine.resume(id); break;
+      case 'skip': await engine.skip(id); break;
+      default: return res.status(404).json({ error: 'Unknown action' });
+    }
+    res.json({ success: true, status: engine.status(id) });
+  } catch (error) {
+    console.error(`[Music ${req.params.action} Error]`, error.message);
+    const msg = error.status === 404
+      ? 'Speaker not found. Open Spotify on that device (or the Player page) and try again.'
+      : error.status === 400 ? error.message : 'Spotify could not do that right now.';
+    res.status(error.status === 400 ? 400 : 502).json({ error: msg, status: engine.status(id) });
+  }
+});
+
+// The browser Player page reports its Web Playback SDK device id.
+app.post('/api/venue/:venueSlug/player/device', resolveVenue, venueAdminAuth, async (req, res) => {
+  const deviceId = req.body && req.body.deviceId;
+  if (!deviceId) return res.status(400).json({ error: 'deviceId required' });
+  try {
+    const attached = await engine.attachBrowserDevice(req.venue.id, String(deviceId));
+    res.json({ success: true, attached, status: engine.status(req.venue.id) });
+  } catch (error) {
+    console.error('[Player Device Error]', error.message);
+    res.status(502).json({ error: 'Could not start playback on this browser' });
   }
 });
 
@@ -756,6 +906,7 @@ app.get('/api/health', async (req, res) => {
 async function start() {
   try {
     await db.initializeSchema();
+    engine.resumeAll().catch(e => console.error('[Engine Resume Error]', e.message));
 
     server.listen(PORT, () => {
       console.log('');

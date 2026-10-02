@@ -14,7 +14,14 @@ White-label, multi-venue music queue for bars, cafes and lounges. Guests scan a 
 | Player | `/player/:slug` | The device plugged into the speakers (Spotify Premium) |
 | Super admin | `/superadmin` | Platform owner (`SUPER_ADMIN_KEY`) |
 
-Playback uses the Spotify Web Playback SDK in the player tab, controlled by the server over WebSockets. The venue connects **its own Spotify Premium account** from the admin dashboard; the platform supplies one Spotify developer app for everyone.
+The venue connects **its own Spotify Premium account** from the admin dashboard; the platform supplies one Spotify developer app for everyone.
+
+**Playback is driven by the server** (`src/engine.js`) on whichever Spotify device the venue chooses in *Music & Speaker*:
+
+- **Spotify speaker or app** (no screen needed): a phone/tablet running Spotify plugged into the sound system, or a Spotify Connect speaker (Sonos, Echo, Google, smart TV, Chromecast).
+- **This browser**: the `/player/:slug` page (Web Playback SDK) acts as the speaker and shows Now Playing + Up next.
+
+Guest songs play in the order added. Shortly before a track ends the engine queues the next one on Spotify, so transitions are gapless. When no requests are waiting, optional **background music** plays: a genre mix (defaults by venue type) or a Spotify playlist. Guest requests always play next, after the current track.
 
 ## Run locally
 
@@ -39,6 +46,7 @@ In the Spotify developer dashboard, the redirect URI must be exactly `${BASE_URL
 ## Testing
 
 ```bash
+DATABASE_URL=... npm run test:engine                         # playback engine simulation (fake Spotify)
 npm run smoke -- http://localhost:3000                       # read-only checks
 SUPER_ADMIN_KEY=... npm run smoke -- <url>                    # also registers, exercises, then deletes a test venue
 ```

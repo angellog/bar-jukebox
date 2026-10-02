@@ -41,6 +41,16 @@
       white-space: nowrap;
       transition: all var(--qp-transition);
     }
+    .mode-option {
+      display: flex; gap: .75rem; align-items: flex-start; cursor: pointer;
+      padding: .75rem; border-radius: var(--qp-radius-md); border: 1px solid var(--qp-glass-border); margin-bottom: .5rem;
+    }
+    .mode-option input { margin-top: .25rem; }
+    .genre-chip {
+      padding: .35rem .8rem; border-radius: 999px; font-size: .8rem; cursor: pointer;
+      border: 1px solid var(--qp-glass-border); background: var(--qp-glass); color: var(--qp-text-secondary);
+    }
+    .genre-chip.on { background: var(--qp-primary); border-color: var(--qp-primary); color: #fff; }
     .admin-nav-item.active {
       background: var(--qp-primary);
       color: #fff;
@@ -120,7 +130,7 @@
         <div class="admin-nav-item" data-target="queue">🎵 Queue & Controls</div>
         <div class="admin-nav-item" data-target="branding">🎨 Brand Identity</div>
         <div class="admin-nav-item" data-target="config">⚙️ Settings</div>
-        <div class="admin-nav-item" data-target="spotify">🔊 Spotify Setup</div>
+        <div class="admin-nav-item" data-target="spotify">🔊 Music & Speaker</div>
         <div class="admin-nav-item" data-target="qr">📱 Branded QR Code</div>
         <a id="playerPageLink" href="#" target="_blank" class="admin-nav-item" style="display:block; text-decoration:none; border: 1.5px dashed var(--qp-primary); color:var(--qp-primary-light)">▶️ Open Player</a>
       </aside>
@@ -323,26 +333,93 @@
           </form>
         </section>
 
-        <!-- SPOTIFY LINK -->
+        <!-- MUSIC & SPEAKER -->
         <section class="admin-panel" id="panel-spotify">
-          <h2 class="qp-h3 qp-mb-sm">Spotify Account Connection</h2>
-          <p class="qp-text-secondary qp-text-sm qp-mb-lg">A Spotify Premium account is required to stream full songs through your browser player.</p>
+          <h2 class="qp-h3 qp-mb-lg">Music & Speaker</h2>
 
-          <div class="qp-card qp-mb-lg" style="padding:1rem; font-size:.9rem; line-height:1.6">
-            <strong>How it works:</strong>
-            <ol style="padding-left:1.2rem; margin-top:.3rem; color:var(--qp-text-secondary)">
-              <li>Click "Connect Spotify Account" below</li>
-              <li>Log in with your <strong>personal Spotify Premium</strong> account</li>
-              <li>Once connected, open the <strong>Player page</strong> (sidebar link) on your laptop</li>
-              <li>Guests scan the QR code, add songs, and they play automatically</li>
-            </ol>
+          <!-- 1. Spotify account -->
+          <div class="qp-card qp-mb-lg" style="padding:1.25rem">
+            <h3 style="font-weight:600; font-size:1rem; margin-bottom:.75rem">1 · Spotify account</h3>
+            <div id="spotifyStatusBox" class="qp-mb-md"></div>
+            <a id="connectSpotifyBtn" href="#" class="qp-btn qp-btn-secondary qp-btn-sm">🔗 Connect Spotify Account</a>
           </div>
 
-          <div id="spotifyStatusBox" class="qp-card qp-mb-lg">
-            <!-- Connected details loaded dynamically -->
+          <!-- 2. Where music plays -->
+          <div class="qp-card qp-mb-lg" style="padding:1.25rem">
+            <h3 style="font-weight:600; font-size:1rem; margin-bottom:.25rem">2 · Where music plays</h3>
+            <p class="qp-text-muted qp-text-xs qp-mb-md">No screen needed: any device running Spotify on the venue's account can be the speaker.</p>
+
+            <label class="mode-option">
+              <input type="radio" name="playbackMode" value="device">
+              <div>
+                <strong>Spotify speaker or app</strong>
+                <div class="qp-text-xs qp-text-muted">A phone or tablet with the Spotify app plugged into your sound system, or a Spotify Connect speaker (Sonos, Echo, Google, smart TV, Chromecast). Control everything from this dashboard.</div>
+              </div>
+            </label>
+            <div id="deviceChooser" class="qp-hidden" style="margin:.5rem 0 1rem 1.9rem">
+              <div style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap">
+                <select id="deviceSelect" class="qp-select" style="flex:1; min-width:220px"></select>
+                <button type="button" id="refreshDevicesBtn" class="qp-btn qp-btn-secondary qp-btn-sm">↻ Refresh</button>
+              </div>
+              <p class="qp-text-xs qp-text-muted qp-mt-xs" id="deviceHint">Open Spotify on the device (logged in to the venue's account), play anything for a second, then press Refresh.</p>
+            </div>
+
+            <label class="mode-option">
+              <input type="radio" name="playbackMode" value="browser">
+              <div>
+                <strong>This browser (Player page)</strong>
+                <div class="qp-text-xs qp-text-muted">A laptop or tablet keeps the <a href="#" id="playerPageLink2" target="_blank" style="text-decoration:underline">Player page</a> open, connected to the speakers.</div>
+              </div>
+            </label>
+
+            <button type="button" id="savePlaybackBtn" class="qp-btn qp-btn-primary qp-btn-sm qp-mt-md">Save speaker</button>
           </div>
 
-          <a id="connectSpotifyBtn" href="#" class="qp-btn qp-btn-primary">🔗 Connect Spotify Account</a>
+          <!-- 3. Background music -->
+          <div class="qp-card qp-mb-lg" style="padding:1.25rem">
+            <h3 style="font-weight:600; font-size:1rem; margin-bottom:.25rem">3 · Background music</h3>
+            <p class="qp-text-muted qp-text-xs qp-mb-md">Keeps music going when nobody has requested a song. Guest requests always play next, at the end of the current track.</p>
+
+            <label class="qp-label" style="display:flex; align-items:center; gap:.5rem; cursor:pointer; margin-bottom:1rem">
+              <input type="checkbox" id="autofillEnabled">
+              Play background music when the request queue is empty
+            </label>
+
+            <div id="autofillOptions">
+              <div style="display:flex; gap:1.25rem; margin-bottom:.75rem; flex-wrap:wrap">
+                <label style="display:flex; gap:.4rem; align-items:center; cursor:pointer"><input type="radio" name="autofillSource" value="genre"> Genre mix</label>
+                <label style="display:flex; gap:.4rem; align-items:center; cursor:pointer"><input type="radio" name="autofillSource" value="playlist"> A Spotify playlist</label>
+              </div>
+
+              <div id="genreBox">
+                <p class="qp-text-xs qp-text-muted qp-mb-sm" id="genreHint">Pick up to 8 genres.</p>
+                <div id="genreChips" style="display:flex; flex-wrap:wrap; gap:.4rem"></div>
+              </div>
+
+              <div id="playlistBox" class="qp-hidden">
+                <label class="qp-label" for="playlistSelect">Your playlists</label>
+                <select id="playlistSelect" class="qp-select qp-mb-sm"><option value="">Loading…</option></select>
+                <label class="qp-label" for="playlistLink">…or paste any Spotify playlist link</label>
+                <input type="text" id="playlistLink" class="qp-input" placeholder="https://open.spotify.com/playlist/...">
+                <p class="qp-text-xs qp-text-muted qp-mt-xs" id="playlistCurrent"></p>
+              </div>
+            </div>
+
+            <button type="button" id="saveAutofillBtn" class="qp-btn qp-btn-primary qp-btn-sm qp-mt-md">Save background music</button>
+          </div>
+
+          <!-- 4. Controls -->
+          <div class="qp-card qp-mb-lg" style="padding:1.25rem">
+            <h3 style="font-weight:600; font-size:1rem; margin-bottom:.5rem">4 · Controls</h3>
+            <div id="musicStatus" class="qp-text-sm qp-mb-md">…</div>
+            <div style="display:flex; gap:.5rem; flex-wrap:wrap">
+              <button type="button" class="qp-btn qp-btn-primary qp-btn-sm" data-music="start">▶ Start music</button>
+              <button type="button" class="qp-btn qp-btn-secondary qp-btn-sm" data-music="pause">⏸ Pause</button>
+              <button type="button" class="qp-btn qp-btn-secondary qp-btn-sm" data-music="resume">⏯ Resume</button>
+              <button type="button" class="qp-btn qp-btn-secondary qp-btn-sm" data-music="skip">⏭ Skip</button>
+              <button type="button" class="qp-btn qp-btn-secondary qp-btn-sm" data-music="stop">⏹ Stop</button>
+            </div>
+          </div>
         </section>
 
         <!-- QR CODE -->
@@ -553,6 +630,177 @@
       }
     });
 
+    // ---------- Music & Speaker ----------
+    let musicState = null;
+    let selectedGenres = [];
+
+    function selectedMode() {
+      const r = document.querySelector('input[name="playbackMode"]:checked');
+      return r ? r.value : 'browser';
+    }
+
+    function syncModeUI() {
+      document.getElementById('deviceChooser').classList.toggle('qp-hidden', selectedMode() !== 'device');
+    }
+    document.querySelectorAll('input[name="playbackMode"]').forEach(r => r.addEventListener('change', () => {
+      syncModeUI();
+      if (selectedMode() === 'device') loadDevices();
+    }));
+
+    function syncAutofillUI() {
+      const src = document.querySelector('input[name="autofillSource"]:checked')?.value || 'genre';
+      document.getElementById('genreBox').classList.toggle('qp-hidden', src !== 'genre');
+      document.getElementById('playlistBox').classList.toggle('qp-hidden', src !== 'playlist');
+      document.getElementById('autofillOptions').style.opacity = document.getElementById('autofillEnabled').checked ? 1 : .5;
+      if (src === 'playlist') loadPlaylists();
+    }
+    document.querySelectorAll('input[name="autofillSource"]').forEach(r => r.addEventListener('change', syncAutofillUI));
+    document.getElementById('autofillEnabled').addEventListener('change', syncAutofillUI);
+
+    function renderMusicStatus(status) {
+      if (!status) return;
+      const icon = { playing: '🟢', paused: '⏸️', idle: '🟡', stopped: '⚪' }[status.state] || '🔴';
+      document.getElementById('musicStatus').textContent = `${icon} ${status.message || status.state}`;
+    }
+
+    function renderGenres(options, defaults) {
+      const box = document.getElementById('genreChips');
+      box.innerHTML = options.map(g => `<button type="button" class="genre-chip${selectedGenres.includes(g) ? ' on' : ''}" data-genre="${g}">${g}</button>`).join('');
+      box.querySelectorAll('.genre-chip').forEach(chip => {
+        chip.onclick = () => {
+          const g = chip.dataset.genre;
+          if (selectedGenres.includes(g)) selectedGenres = selectedGenres.filter(x => x !== g);
+          else if (selectedGenres.length < 8) selectedGenres.push(g);
+          else return showToast('Up to 8 genres', 'error');
+          chip.classList.toggle('on');
+        };
+      });
+      document.getElementById('genreHint').textContent = `Pick up to 8 genres. Suggested for a ${musicState.venueType}: ${defaults.join(', ')}.`;
+    }
+
+    async function loadMusic() {
+      try {
+        const res = await fetch(`/api/venue/${slug}/admin/music`);
+        if (!res.ok) return;
+        musicState = await res.json();
+        renderMusicStatus(musicState.status);
+        const mode = musicState.playback.mode || 'browser';
+        document.querySelector(`input[name="playbackMode"][value="${mode}"]`).checked = true;
+        syncModeUI();
+        if (mode === 'device') loadDevices();
+        const af = musicState.autofill;
+        document.getElementById('autofillEnabled').checked = af.enabled;
+        document.querySelector(`input[name="autofillSource"][value="${af.source || 'genre'}"]`).checked = true;
+        selectedGenres = af.genres.length ? af.genres : [...af.defaultGenres];
+        renderGenres(musicState.genreOptions, af.defaultGenres);
+        document.getElementById('playlistCurrent').textContent = af.playlistName ? `Current: ${af.playlistName}` : '';
+        syncAutofillUI();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function refreshMusicStatus() {
+      const res = await fetch(`/api/venue/${slug}/admin/music`).catch(() => null);
+      if (res && res.ok) renderMusicStatus((await res.json()).status);
+    }
+
+    async function loadDevices() {
+      const sel = document.getElementById('deviceSelect');
+      sel.innerHTML = '<option value="">Looking for devices…</option>';
+      try {
+        const res = await fetch(`/api/venue/${slug}/admin/devices`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        const saved = musicState?.playback;
+        let devices = data.devices.filter(d => !d.restricted);
+        if (saved?.deviceId && !devices.some(d => d.id === saved.deviceId)) {
+          devices = [{ id: saved.deviceId, name: `${saved.deviceName} (offline)`, type: '' }, ...devices];
+        }
+        sel.innerHTML = devices.length
+          ? devices.map(d => `<option value="${d.id}" data-name="${escapeHTML(d.name.replace(' (offline)', ''))}" ${d.id === saved?.deviceId ? 'selected' : ''}>${escapeHTML(d.name)}${d.type ? ` · ${d.type}` : ''}${d.active ? ' · active' : ''}</option>`).join('')
+          : '<option value="">No devices found</option>';
+      } catch (err) {
+        sel.innerHTML = '<option value="">Could not load devices</option>';
+        showToast(err.message, 'error');
+      }
+    }
+    document.getElementById('refreshDevicesBtn').addEventListener('click', loadDevices);
+
+    async function loadPlaylists() {
+      const sel = document.getElementById('playlistSelect');
+      if (sel.dataset.loaded) return;
+      try {
+        const res = await fetch(`/api/venue/${slug}/admin/playlists`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        sel.dataset.loaded = '1';
+        const current = musicState?.autofill.playlistUri;
+        sel.innerHTML = '<option value="">Choose one of your playlists…</option>' + data.playlists.map(p =>
+          `<option value="${p.uri}" ${p.uri === current ? 'selected' : ''}>${escapeHTML(p.name)}${p.tracks != null ? ` (${p.tracks})` : ''}</option>`).join('');
+      } catch (err) {
+        sel.innerHTML = `<option value="">${escapeHTML(err.message)}</option>`;
+      }
+    }
+
+    document.getElementById('savePlaybackBtn').addEventListener('click', async () => {
+      const mode = selectedMode();
+      const sel = document.getElementById('deviceSelect');
+      const opt = sel.selectedOptions[0];
+      const body = { mode, deviceId: mode === 'device' ? sel.value : null, deviceName: opt?.dataset.name };
+      if (mode === 'device' && !sel.value) return showToast('Choose a device first', 'error');
+      try {
+        const res = await fetch(`/api/venue/${slug}/admin/playback`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        showToast(mode === 'device' ? `Speaker saved: ${body.deviceName}. Press Start music.` : 'Saved. Open the Player page and press Start.', 'success');
+        await loadMusic();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    document.getElementById('saveAutofillBtn').addEventListener('click', async () => {
+      const source = document.querySelector('input[name="autofillSource"]:checked')?.value || 'genre';
+      const body = { enabled: document.getElementById('autofillEnabled').checked, source, genres: selectedGenres };
+      if (source === 'playlist') {
+        const link = document.getElementById('playlistLink').value.trim();
+        const sel = document.getElementById('playlistSelect');
+        const chosen = link || sel.value;
+        if (!chosen && !musicState?.autofill.playlistUri) return showToast('Choose a playlist or paste a link', 'error');
+        if (chosen) {
+          body.playlist = chosen;
+          if (!link) body.playlistName = sel.selectedOptions[0]?.textContent.replace(/ \(\d+\)$/, '');
+        }
+      }
+      try {
+        const res = await fetch(`/api/venue/${slug}/admin/autofill`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        showToast('Background music saved', 'success');
+        document.getElementById('playlistLink').value = '';
+        await loadMusic();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    document.querySelectorAll('[data-music]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          const res = await fetch(`/api/venue/${slug}/admin/music/${btn.dataset.music}`, { method: 'POST' });
+          const data = await res.json();
+          if (data.status) renderMusicStatus(data.status);
+          if (!res.ok) throw new Error(data.error);
+        } catch (err) {
+          showToast(err.message, 'error');
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+
     // Edit limits config
     document.getElementById('configForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -681,6 +929,7 @@
 
         // Set player page link
         document.getElementById('playerPageLink').href = `/player/${slug}`;
+        document.getElementById('playerPageLink2').href = `/player/${slug}`;
 
         // Update setup checklist
         const checkSpotifyIcon = document.getElementById('checkSpotifyIcon');
@@ -779,12 +1028,14 @@
       await loadBrandingAndConfig();
       await loadStats();
       await loadQueue();
+      await loadMusic();
 
       // Refresh stats regularly
       if (window.__qpRefresh) clearInterval(window.__qpRefresh);
       window.__qpRefresh = setInterval(() => {
         loadStats();
         loadQueue();
+        refreshMusicStatus();
       }, 10000);
     }
 
