@@ -8,6 +8,7 @@ const http = require('http');
 const path = require('path');
 const crypto = require('crypto');
 const QRCode = require('qrcode');
+const { version: APP_VERSION } = require('../package.json');
 
 const QueuePlayDB = require('./database');
 const SpotifyService = require('./spotify');
@@ -897,7 +898,7 @@ app.get('/api/health', async (req, res) => {
   }
   res.status(database === 'ok' ? 200 : 503).json({
     status: database === 'ok' ? 'ok' : 'degraded',
-    version: '2.1.0',
+    version: APP_VERSION,
     database,
     spotify: !!(process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET)
   });
@@ -911,7 +912,7 @@ async function start() {
     server.listen(PORT, () => {
       console.log('');
       console.log('  ╔══════════════════════════════════════╗');
-      console.log('  ║        QUEUEPLAY SERVER v2.0         ║');
+      console.log(`  ║        QUEUEPLAY SERVER v${APP_VERSION.padEnd(11)}║`);
       console.log('  ║         (PostgreSQL Edition)          ║');
       console.log('  ╠══════════════════════════════════════╣');
       console.log(`  ║  Server:   ${BASE_URL.padEnd(25)}║`);

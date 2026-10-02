@@ -35,13 +35,22 @@ Requires Node 20+ and PostgreSQL. The schema is created automatically on boot.
 
 ## Deploy (Railway)
 
-The Railway project `queueplay-jukebox` has two services: `queueplay-jukebox` (this app) and `Postgres`. The app service is connected to `angellog/bar-jukebox` on `main`, so pushes to `main` *should* deploy automatically, but as of Oct 2026 the GitHub webhook isn't firing; until Railway's GitHub app is granted access to this repo, trigger a deploy from the Railway dashboard (or reconnect the source).
+Railway project `queueplay-jukebox`, two environments, each with its own app + Postgres:
+
+| Environment | URL | Branch |
+|---|---|---|
+| production | https://queueplay-jukebox-production.up.railway.app | `main` |
+| staging | https://queueplay-jukebox-staging.up.railway.app | `main` (point it at a feature branch to test new work) |
+
+Workflow: build on a feature branch → test on staging → merge to `main` → production. Releases are tagged (`v1.0.0-mvp`, `v1.1.0`); roll back by redeploying a tag.
+
+The GitHub push webhook isn't firing (Oct 2026). Until Railway's GitHub app is granted access to this repo, trigger deploys from the Railway dashboard or by reconnecting the service source.
 
 Required variables: `DATABASE_URL` (reference `${{Postgres.DATABASE_URL}}`), `BASE_URL`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SUPER_ADMIN_KEY`, `SALT`. Health check: `GET /api/health`.
 
 **Spotify Development Mode (since Mar 2026):** client-credentials tokens can no longer search, so guest search runs on the venue's connected Spotify account. A venue must connect Spotify before guests can search. The app owner's account needs Premium, and only 5 Spotify users can connect until Spotify grants extended quota.
 
-In the Spotify developer dashboard, the redirect URI must be exactly `${BASE_URL}/auth/spotify/callback`. While the Spotify app is in **Development mode**, only Spotify users added under *User Management* can connect; apply for extended quota before onboarding real venues.
+In the Spotify developer dashboard, add the redirect URI for **each** environment, exactly `${BASE_URL}/auth/spotify/callback` (production and staging). While the Spotify app is in **Development mode**, only Spotify users added under *User Management* can connect; apply for extended quota before onboarding real venues.
 
 ## Testing
 
@@ -68,3 +77,4 @@ SUPER_ADMIN_KEY=... npm run smoke -- <url>                    # also registers, 
 ## Not built yet
 
 - Billing: plans exist and the super admin can change a venue's plan, but there is no Stripe checkout.
+- Venues connected before v1.1 must reconnect Spotify once to let QueuePlay list their playlists (new scope); playback works without it.

@@ -1,6 +1,6 @@
 {
   "name": "queueplay",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "White-label SaaS music queue for cafes, restaurants, and public spaces. Guests scan a QR code, pick a song, and it plays through the venue's speakers.",
   "main": "src/server.js",
   "scripts": {
