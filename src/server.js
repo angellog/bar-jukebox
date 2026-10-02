@@ -178,6 +178,17 @@ async function getVenueSpotifyToken(venue) {
 
 const NOT_CONNECTED_MSG = "This venue hasn't connected Spotify yet. Ask the staff to connect it in the admin dashboard.";
 
+// Venue setting wins (0 = no cooldown); fall back to the plan default when unset.
+function cooldownMinutes(venue, plan) {
+  return venue.rate_limit_minutes ?? plan.rate_limit_minutes;
+}
+
+function clampInt(value, min, max) {
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.min(Math.max(n, min), max);
+}
+
 const venueClients = new Map();
 
 wss.on('connection', async (ws, req) => {
@@ -336,7 +347,7 @@ app.post('/api/venue/:venueSlug/queue', resolveVenue, async (req, res) => {
 
     await db.createOrUpdateGuestSession(venue.id, req.guestId, req.guestIp);
 
-    const rateCheck = await db.canGuestRequest(venue.id, req.guestId, venue.rate_limit_minutes || plan.rate_limit_minutes);
+    const rateCheck = await db.canGuestRequest(venue.id, req.guestId, cooldownMinutes(venue, plan));
     if (!rateCheck.allowed) {
       return res.status(429).json({
         error: 'Rate limit exceeded',
@@ -385,7 +396,7 @@ app.post('/api/venue/:venueSlug/queue', resolveVenue, async (req, res) => {
     res.json({
       success: true,
       position: result.position,
-      nextRequestIn: (venue.rate_limit_minutes || plan.rate_limit_minutes) * 60
+      nextRequestIn: (cooldownMinutes(venue, plan)) * 60
     });
   } catch (error) {
     console.error('[Queue Add Error]', error.message);
@@ -435,8 +446,8 @@ app.post('/api/venue/:venueSlug/play-next', resolveVenue, venueAdminAuth, async 
 app.get('/api/venue/:venueSlug/rate-limit', resolveVenue, async (req, res) => {
   try {
     const plan = await db.getPlan(req.venue.plan_id);
-    const rateCheck = await db.canGuestRequest(req.venue.id, req.guestId, req.venue.rate_limit_minutes || plan.rate_limit_minutes);
-    res.json({ ...rateCheck, rateLimitMinutes: req.venue.rate_limit_minutes || plan.rate_limit_minutes });
+    const rateCheck = await db.canGuestRequest(req.venue.id, req.guestId, cooldownMinutes(req.venue, plan));
+    res.json({ ...rateCheck, rateLimitMinutes: cooldownMinutes(req.venue, plan) });
   } catch (error) {
     res.status(500).json({ error: 'Failed to check rate limit' });
   }
@@ -484,8 +495,22 @@ app.put('/api/venue/:venueSlug/admin/branding', resolveVenue, venueAdminAuth, as
 });
 
 app.put('/api/venue/:venueSlug/admin/config', resolveVenue, venueAdminAuth, async (req, res) => {
-  await db.updateVenueConfig(req.venue.id, req.body);
-  res.json({ success: true });
+  try {
+    const plan = await db.getPlan(req.venue.plan_id);
+    const b = req.body || {};
+    const config = {
+      rate_limit_minutes: clampInt(b.rate_limit_minutes, 0, 120),
+      songs_per_guest: clampInt(b.songs_per_guest, 1, plan.max_songs_per_day),
+      max_queue_size: clampInt(b.max_queue_size, 1, 200),
+      allow_explicit: b.allow_explicit === undefined ? undefined : (Number(b.allow_explicit) ? 1 : 0),
+      auto_play: b.auto_play === undefined ? undefined : (Number(b.auto_play) ? 1 : 0)
+    };
+    await db.updateVenueConfig(req.venue.id, config);
+    res.json({ success: true, config });
+  } catch (error) {
+    console.error('[Config Error]', error.message);
+    res.status(500).json({ error: 'Failed to save settings' });
+  }
 });
 
 app.post('/api/venue/:venueSlug/admin/clear-queue', resolveVenue, venueAdminAuth, async (req, res) => {
@@ -541,6 +566,11 @@ app.get('/auth/spotify/connect/:venueSlug', resolveVenue, (req, res) => {
       </div>
     `);
   }
+  if (req.query.return === 'player') {
+    res.cookie('qp_oauth_return', 'player', { maxAge: 15 * 60 * 1000, httpOnly: true, sameSite: 'lax' });
+  } else {
+    res.clearCookie('qp_oauth_return');
+  }
   const authUrl = spotify.getAuthUrl(signState(req.venue.id));
   res.redirect(authUrl);
 });
@@ -568,10 +598,12 @@ app.get('/auth/spotify/callback', async (req, res) => {
     }
 
     const slug = venue ? venue.slug : '';
-    res.redirect(`/admin/${slug}?spotify=connected`);
+    const backToPlayer = req.cookies.qp_oauth_return === 'player';
+    res.clearCookie('qp_oauth_return');
+    res.redirect(backToPlayer ? `/player/${slug}` : `/admin/${slug}?spotify=connected`);
   } catch (error) {
     console.error('[Spotify OAuth Error]', error.message);
-    res.status(500).send('Spotify connection failed. Please try again.');
+    res.status(500).send(`Spotify connection failed: ${error.message.replace(/[<>&]/g, '')}. Please try again from your dashboard.`);
   }
 });
 

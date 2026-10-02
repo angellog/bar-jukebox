@@ -61,6 +61,11 @@
     <div class="qp-card qp-text-center">
       <h1 class="qp-h3 qp-mb-md">🔊 Ready to play</h1>
       <p class="qp-text-secondary qp-mb-md">Keep this tab open on the device connected to your speakers. Spotify Premium is required.</p>
+      <div id="notConnectedBox" class="qp-hidden qp-mb-md" style="padding:1rem; border-radius:var(--qp-radius); background:rgba(244,63,94,.12); border:1px solid rgba(244,63,94,.35); text-align:left">
+        <strong>Spotify isn't connected for this venue yet.</strong>
+        <p class="qp-text-secondary qp-text-sm qp-mt-xs">Connect the venue's Spotify Premium account, then come back to this page.</p>
+        <a id="connectSpotifyLink" href="#" class="qp-btn qp-btn-primary qp-w-full qp-mt-md" style="background:#1db954">Connect Spotify</a>
+      </div>
       <button id="startBtn" class="qp-btn qp-btn-primary qp-w-full">Start Player</button>
       <button id="logoutBtn" class="qp-btn qp-btn-secondary qp-w-full qp-mt-md">Use a different venue password</button>
     </div>
@@ -164,6 +169,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Invalid password');
         show('startGate');
+        checkSpotifyConnected();
       } catch (err) {
         showToast(err.message, 'error');
       } finally {
@@ -376,9 +382,25 @@
       document.title = `${song.title} · QueuePlay`;
     }
 
+    async function checkSpotifyConnected() {
+      try {
+        const v = await (await fetch(`/api/venue/${slug}`)).json();
+        const connected = !!v.spotify_connected;
+        $('notConnectedBox').classList.toggle('qp-hidden', connected);
+        $('startBtn').classList.toggle('qp-hidden', !connected);
+        $('connectSpotifyLink').href = `/auth/spotify/connect/${slug}?return=player`;
+        return connected;
+      } catch {
+        return true;
+      }
+    }
+
     fetch(`/api/venue/${slug}/admin/session`)
       .then(r => r.json())
-      .then(d => show(d.authenticated ? 'startGate' : 'authGate'))
+      .then(d => {
+        show(d.authenticated ? 'startGate' : 'authGate');
+        if (d.authenticated) checkSpotifyConnected();
+      })
       .catch(() => show('authGate'));
   </script>
 </body>

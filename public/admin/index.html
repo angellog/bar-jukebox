@@ -135,7 +135,7 @@
             <h4 style="font-weight:600; margin-bottom:.75rem; font-size:.95rem">🚀 Setup Checklist</h4>
             <div style="display:flex; flex-direction:column; gap:.5rem; font-size:.88rem">
               <div id="checkSpotify" style="display:flex; align-items:center; gap:.5rem; color:var(--qp-text-secondary)">
-                <span id="checkSpotifyIcon">⏳</span> Connect Spotify Premium account
+                <span id="checkSpotifyIcon">⏳</span> <a href="#" id="checkSpotifyLink" style="color:inherit; text-decoration:underline">Connect Spotify Premium account</a>
               </div>
               <div id="checkPlayer" style="display:flex; align-items:center; gap:.5rem; color:var(--qp-text-secondary)">
                 <span id="checkPlayerIcon">⏳</span> Open player page on your laptop
@@ -260,35 +260,58 @@
 
         <!-- CONFIG -->
         <section class="admin-panel" id="panel-config">
-          <h2 class="qp-h3 qp-mb-lg">System Rules & Limits</h2>
+          <h2 class="qp-h3 qp-mb-lg">Settings</h2>
+
+          <!-- Venue links (same ones shown at sign-up) -->
+          <div class="qp-card qp-mb-lg" style="padding:1.25rem">
+            <h3 style="font-weight:600; font-size:1rem; margin-bottom:.25rem">🔗 Your Venue Links</h3>
+            <p class="qp-text-muted qp-text-xs qp-mb-md">The links from sign-up. Staff log in with the venue password; no key needed.</p>
+            <div id="venueLinks" style="display:flex; flex-direction:column; gap:.75rem"></div>
+          </div>
 
           <form id="configForm">
-            <div class="qp-grid" style="grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem">
-              <div>
-                <label class="qp-label">Guest request cooldown (minutes)</label>
-                <input type="number" id="configRateLimit" class="qp-input" min="1" max="60" required>
+            <!-- Rate limits -->
+            <div class="qp-card qp-mb-lg" style="padding:1.25rem">
+              <h3 style="font-weight:600; font-size:1rem; margin-bottom:.25rem">⏱️ Guest Rate Limits</h3>
+              <p class="qp-text-muted qp-text-xs qp-mb-md">Controls how often each guest (per phone) can add songs.</p>
+
+              <div class="qp-grid" style="grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-bottom:1rem">
+                <div>
+                  <label class="qp-label" for="configRateLimit">Cooldown between songs (minutes)</label>
+                  <input type="number" id="configRateLimit" class="qp-input" min="0" max="120" step="1" required>
+                  <p class="qp-text-muted qp-text-xs qp-mt-xs">0 = no cooldown</p>
+                </div>
+                <div>
+                  <label class="qp-label" for="configSongsPerGuest">Songs per guest per day</label>
+                  <input type="number" id="configSongsPerGuest" class="qp-input" min="1" step="1" required>
+                  <p class="qp-text-muted qp-text-xs qp-mt-xs" id="songsPerDayHint">&nbsp;</p>
+                </div>
+                <div>
+                  <label class="qp-label" for="configMaxQueue">Max songs in queue</label>
+                  <input type="number" id="configMaxQueue" class="qp-input" min="1" max="200" step="1" required>
+                  <p class="qp-text-muted qp-text-xs qp-mt-xs">New requests are refused when full</p>
+                </div>
               </div>
-              <div>
-                <label class="qp-label">Max songs per day per guest</label>
-                <input type="number" id="configSongsPerGuest" class="qp-input" min="1" max="20" required>
+
+              <div style="display:flex; flex-wrap:wrap; gap:.5rem; align-items:center">
+                <span class="qp-text-xs qp-text-muted">Presets:</span>
+                <button type="button" class="qp-btn qp-btn-secondary qp-btn-sm" data-preset="0,50,100">Party (no limits)</button>
+                <button type="button" class="qp-btn qp-btn-secondary qp-btn-sm" data-preset="5,10,25">Balanced</button>
+                <button type="button" class="qp-btn qp-btn-secondary qp-btn-sm" data-preset="15,3,15">Strict</button>
+                <button type="button" id="resetLimitsInlineBtn" class="qp-btn qp-btn-secondary qp-btn-sm" style="margin-left:auto">↺ Reset all guests' limits now</button>
               </div>
             </div>
 
-            <div class="qp-grid" style="grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem">
-              <div>
-                <label class="qp-label">Max queue length</label>
-                <input type="number" id="configMaxQueue" class="qp-input" min="5" max="100" required>
-              </div>
-              <div>
-                <label class="qp-label">Explicit Tracks</label>
+            <!-- Playback -->
+            <div class="qp-card qp-mb-lg" style="padding:1.25rem">
+              <h3 style="font-weight:600; font-size:1rem; margin-bottom:.75rem">🎚️ Playback</h3>
+              <div class="qp-mb-md" style="max-width:320px">
+                <label class="qp-label" for="configAllowExplicit">Explicit tracks</label>
                 <select id="configAllowExplicit" class="qp-select">
                   <option value="1">Allow explicit songs</option>
                   <option value="0">Block explicit content</option>
                 </select>
               </div>
-            </div>
-
-            <div class="qp-mb-lg">
               <label class="qp-label" style="display:flex; align-items:center; gap:.5rem; cursor:pointer">
                 <input type="checkbox" id="configAutoPlay" value="1" checked>
                 Auto-play songs when added to queue
@@ -296,7 +319,7 @@
               <p class="qp-text-muted qp-text-xs qp-mt-xs">When enabled, the first song in the queue starts playing immediately if nothing is currently playing.</p>
             </div>
 
-            <button type="submit" class="qp-btn qp-btn-primary">Save Configuration</button>
+            <button type="submit" class="qp-btn qp-btn-primary">Save Settings</button>
           </form>
         </section>
 
@@ -484,6 +507,52 @@
       }
     });
 
+    function renderVenueLinks() {
+      const origin = location.origin;
+      const links = [
+        { label: 'Guest page (share with customers / QR code)', url: `${origin}/v/${slug}` },
+        { label: 'Admin dashboard', url: `${origin}/admin/${slug}` },
+        { label: 'Player (open on your speaker device)', url: `${origin}/player/${slug}` }
+      ];
+      document.getElementById('venueLinks').innerHTML = links.map((l, i) => `
+        <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap">
+          <div style="flex:1; min-width:220px">
+            <div class="qp-text-xs qp-text-muted">${l.label}</div>
+            <a href="${l.url}" target="_blank" style="font-family:monospace; font-size:.85rem; word-break:break-all">${l.url}</a>
+          </div>
+          <button type="button" class="qp-btn qp-btn-secondary qp-btn-sm" data-copy="${i}">Copy</button>
+        </div>
+      `).join('');
+      document.querySelectorAll('#venueLinks [data-copy]').forEach(btn => {
+        btn.onclick = async () => {
+          await navigator.clipboard.writeText(links[btn.dataset.copy].url);
+          btn.textContent = 'Copied ✓';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+        };
+      });
+    }
+
+    document.querySelectorAll('[data-preset]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const [cooldown, perDay, queue] = btn.dataset.preset.split(',').map(Number);
+        const perDayInput = document.getElementById('configSongsPerGuest');
+        document.getElementById('configRateLimit').value = cooldown;
+        perDayInput.value = perDayInput.max ? Math.min(perDay, Number(perDayInput.max)) : perDay;
+        document.getElementById('configMaxQueue').value = queue;
+        showToast('Preset applied. Click Save Settings to keep it.');
+      });
+    });
+
+    document.getElementById('resetLimitsInlineBtn').addEventListener('click', async () => {
+      try {
+        const res = await fetch(`/api/venue/${slug}/admin/reset-limits`, { method: 'POST' });
+        if (!res.ok) throw new Error((await res.json()).error);
+        showToast('All guests can request again right away', 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
     // Edit limits config
     document.getElementById('configForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -636,9 +705,15 @@
         document.getElementById('brandCustomCss').value = venue.custom_css || '';
 
         // Rules config
-        document.getElementById('configRateLimit').value = venue.rate_limit_minutes || 5;
+        document.getElementById('configRateLimit').value = venue.rate_limit_minutes ?? 5;
         document.getElementById('configSongsPerGuest').value = venue.songs_per_guest || 10;
         document.getElementById('configMaxQueue').value = venue.max_queue_size || 20;
+        const planMaxPerDay = data.plan?.max_songs_per_day;
+        if (planMaxPerDay) {
+          document.getElementById('configSongsPerGuest').max = planMaxPerDay;
+          document.getElementById('songsPerDayHint').textContent = `Your ${data.plan.name} plan allows up to ${planMaxPerDay}`;
+        }
+        renderVenueLinks();
         document.getElementById('configAllowExplicit').value = venue.allow_explicit;
         document.getElementById('configAutoPlay').checked = venue.auto_play !== 0;
 
@@ -668,6 +743,7 @@
         }
 
         document.getElementById('connectSpotifyBtn').href = `/auth/spotify/connect/${slug}`;
+        document.getElementById('checkSpotifyLink').href = venue.spotify_connected ? `/player/${slug}` : `/auth/spotify/connect/${slug}`;
 
         // QR Code details
         const qrRes = await fetch(`/api/venue/${slug}/qr`);

@@ -117,6 +117,20 @@ async function main() {
     const stats = await stranger(`/api/venue/${slug}/admin/stats`);
     check('admin API works with session cookie', stats.status === 200);
 
+    const cfg = await stranger(`/api/venue/${slug}/admin/config`, {
+      method: 'PUT',
+      body: { rate_limit_minutes: 0, songs_per_guest: 99999, max_queue_size: 30, allow_explicit: 1, auto_play: 1 }
+    });
+    check('save rate limits (0 = no cooldown)', cfg.status === 200 && cfg.json?.config?.rate_limit_minutes === 0);
+    check('songs/day capped at plan max', cfg.json?.config?.songs_per_guest > 0 && cfg.json.config.songs_per_guest < 99999, `saved ${cfg.json?.config?.songs_per_guest}`);
+    const rl = await anon(`/api/venue/${slug}/rate-limit`);
+    check('guest sees no cooldown', rl.json?.allowed === true && rl.json?.rateLimitMinutes === 0);
+    // restore a cooldown so the queue tests below exercise it
+    await stranger(`/api/venue/${slug}/admin/config`, { method: 'PUT', body: { rate_limit_minutes: 5 } });
+
+    const strangerCfg = await anon(`/api/venue/${slug}/admin/config`, { method: 'PUT', body: { rate_limit_minutes: 0 } });
+    check('strangers cannot change limits', strangerCfg.status === 401);
+
     await stranger(`/api/venue/${slug}/admin/logout`, { method: 'POST' });
     const afterLogout = await stranger(`/api/venue/${slug}/admin/stats`);
     check('logout ends session', afterLogout.status === 401);
