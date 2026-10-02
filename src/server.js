@@ -190,6 +190,42 @@ function clampInt(value, min, max) {
 }
 
 const venueClients = new Map();
+const venuePlayers = new Map();
+
+function parseCookies(header) {
+  const out = {};
+  (header || '').split(';').forEach(part => {
+    const i = part.indexOf('=');
+    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+  });
+  return out;
+}
+
+function nowPlayingKey(np) {
+  if (!np) return '';
+  const started = np.started_at instanceof Date ? np.started_at.toISOString() : String(np.started_at);
+  return `${np.song_id}|${started}`;
+}
+
+// Serialize advances per venue so concurrent "next" requests can't skip several songs.
+const advanceLocks = new Map();
+function withVenueLock(venueId, fn) {
+  const prev = advanceLocks.get(venueId) || Promise.resolve();
+  const run = prev.catch(() => {}).then(fn);
+  advanceLocks.set(venueId, run);
+  run.finally(() => { if (advanceLocks.get(venueId) === run) advanceLocks.delete(venueId); });
+  return run;
+}
+
+// Moves to the next queued song and broadcasts the now_playing row (with started_at).
+async function advanceVenue(venueId) {
+  const next = await db.playNext(venueId);
+  if (!next) await db.clearNowPlaying(venueId);
+  const nowPlaying = next ? await db.getNowPlaying(venueId) : null;
+  broadcastToVenue(venueId, 'now_playing', nowPlaying);
+  broadcastToVenue(venueId, 'queue_updated', { queue: await db.getQueue(venueId) });
+  return nowPlaying;
+}
 
 wss.on('connection', async (ws, req) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -197,14 +233,34 @@ wss.on('connection', async (ws, req) => {
   if (!venueParam) { ws.close(); return; }
 
   let venueId;
+  let venue;
   try {
-    const venue = (await db.getVenueById(venueParam)) || (await db.getVenueBySlug(venueParam));
+    venue = (await db.getVenueById(venueParam)) || (await db.getVenueBySlug(venueParam));
     if (!venue) { ws.close(); return; }
     venueId = venue.id;
   } catch (error) {
     console.error('[WS Resolve Error]', error.message);
     ws.close();
     return;
+  }
+
+  // Only one player tab per venue: each player is a separate Spotify device on the same
+  // account, and two of them fight over playback (music stops and starts).
+  if (url.searchParams.get('role') === 'player') {
+    const cookies = parseCookies(req.headers.cookie);
+    if (!verifySession(cookies[sessionCookieName(venue.slug)], venue.id)) {
+      ws.close(4001, 'Unauthorized');
+      return;
+    }
+    const previous = venuePlayers.get(venueId);
+    if (previous && previous !== ws && previous.readyState === WebSocket.OPEN) {
+      previous.send(JSON.stringify({ type: 'player_replaced' }));
+      previous.close(4000, 'Replaced by another player');
+    }
+    venuePlayers.set(venueId, ws);
+    ws.on('close', () => {
+      if (venuePlayers.get(venueId) === ws) venuePlayers.delete(venueId);
+    });
   }
 
   if (!venueClients.has(venueId)) venueClients.set(venueId, new Set());
@@ -384,13 +440,9 @@ app.post('/api/venue/:venueSlug/queue', resolveVenue, async (req, res) => {
     broadcastToVenue(venue.id, 'queue_updated', { queue });
 
     if (venue.auto_play && venue.spotify_connected) {
-      const current = await db.getNowPlaying(venue.id);
-      if (!current) {
-        const nextSong = await db.playNext(venue.id);
-        if (nextSong) {
-          broadcastToVenue(venue.id, 'now_playing', nextSong);
-        }
-      }
+      await withVenueLock(venue.id, async () => {
+        if (!(await db.getNowPlaying(venue.id))) await advanceVenue(venue.id);
+      });
     }
 
     res.json({
@@ -425,20 +477,27 @@ app.get('/api/venue/:venueSlug/now-playing', resolveVenue, async (req, res) => {
   res.json({ nowPlaying });
 });
 
+// Body { current } (optional): the now-playing key the caller believes is current.
+// If it no longer matches, someone else already advanced, so we don't skip again.
 app.post('/api/venue/:venueSlug/play-next', resolveVenue, venueAdminAuth, async (req, res) => {
+  const venueId = req.venue.id;
+  const expected = req.body && typeof req.body.current === 'string' ? req.body.current : null;
   try {
-    const nextSong = await db.playNext(req.venue.id);
-    if (nextSong) {
-      broadcastToVenue(req.venue.id, 'now_playing', nextSong);
-      const queue = await db.getQueue(req.venue.id);
-      broadcastToVenue(req.venue.id, 'queue_updated', { queue });
-      res.json({ success: true, nowPlaying: nextSong });
-    } else {
-      await db.clearNowPlaying(req.venue.id);
-      broadcastToVenue(req.venue.id, 'now_playing', null);
-      res.json({ success: true, nowPlaying: null, message: 'Queue is empty' });
-    }
+    const result = await withVenueLock(venueId, async () => {
+      if (expected !== null) {
+        const current = await db.getNowPlaying(venueId);
+        if (nowPlayingKey(current) !== expected) return { advanced: false, nowPlaying: current };
+      }
+      return { advanced: true, nowPlaying: await advanceVenue(venueId) };
+    });
+    res.json({
+      success: true,
+      advanced: result.advanced,
+      nowPlaying: result.nowPlaying,
+      ...(result.nowPlaying ? {} : { message: 'Queue is empty' })
+    });
   } catch (error) {
+    console.error('[Play Next Error]', error.message);
     res.status(500).json({ error: 'Failed to play next' });
   }
 });
@@ -588,13 +647,9 @@ app.get('/auth/spotify/callback', async (req, res) => {
     const venue = await db.getVenueById(venueId);
 
     if (venue && venue.auto_play) {
-      const current = await db.getNowPlaying(venue.id);
-      if (!current) {
-        const nextSong = await db.playNext(venue.id);
-        if (nextSong) {
-          broadcastToVenue(venue.id, 'now_playing', nextSong);
-        }
-      }
+      await withVenueLock(venue.id, async () => {
+        if (!(await db.getNowPlaying(venue.id))) await advanceVenue(venue.id);
+      });
     }
 
     const slug = venue ? venue.slug : '';

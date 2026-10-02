@@ -66,6 +66,10 @@
         <p class="qp-text-secondary qp-text-sm qp-mt-xs">Connect the venue's Spotify Premium account, then come back to this page.</p>
         <a id="connectSpotifyLink" href="#" class="qp-btn qp-btn-primary qp-w-full qp-mt-md" style="background:#1db954">Connect Spotify</a>
       </div>
+      <div id="replacedBox" class="qp-hidden qp-mb-md" style="padding:1rem; border-radius:var(--qp-radius); background:rgba(250,204,21,.1); border:1px solid rgba(250,204,21,.35); text-align:left">
+        <strong>The player was opened in another tab or device.</strong>
+        <p class="qp-text-secondary qp-text-sm qp-mt-xs">Only one player can run per venue, otherwise Spotify keeps switching between them. Tap below to play from this one instead.</p>
+      </div>
       <button id="startBtn" class="qp-btn qp-btn-primary qp-w-full">Start Player</button>
       <button id="logoutBtn" class="qp-btn qp-btn-secondary qp-w-full qp-mt-md">Use a different venue password</button>
     </div>
@@ -120,6 +124,8 @@
     let currentTrackId = null;   // Spotify track id actually loaded
     let advancing = false;       // guards against double play-next
     let pendingSong = undefined; // now_playing received before device was ready
+    let lastPositionMs = 0;      // last known position, to tell a real track end from a stall
+    let replaced = false;        // another tab/device took over as the venue's player
 
     const $ = id => document.getElementById(id);
 
@@ -206,6 +212,13 @@
     window.onSpotifyWebPlaybackSDKReady = () => { sdkReady = true; };
 
     function startPlayer() {
+      replaced = false;
+      $('replacedBox').classList.add('qp-hidden');
+      if (spotifyPlayer) { spotifyPlayer.disconnect(); spotifyPlayer = null; }
+      if (ws) { ws.onclose = null; ws.close(); ws = null; }
+      deviceId = null;
+      currentSongKey = null;
+      currentTrackId = null;
       show('playerSection');
       setStatus('Connecting to Spotify...');
 
@@ -254,8 +267,15 @@
       connectWebSocket();
     }
 
+    function isOurTrack(t) {
+      // Spotify may play a market-relinked copy with a different id.
+      return t && currentTrackId && (t.id === currentTrackId || (t.linked_from && t.linked_from.id === currentTrackId));
+    }
+
     function handleStateChange(state) {
       if (!state) return;
+      const prevPosition = Math.max(lastPositionMs, trackProgressMs);
+      const prevDuration = trackDurationMs;
       isPlaying = !state.paused;
       $('playBtn').textContent = isPlaying ? '⏸️' : '▶️';
 
@@ -266,9 +286,13 @@
       if (isPlaying) startProgressTicker();
       else clearInterval(progressInterval);
 
-      // A track finished: it is paused at 0 and our track moved into previous_tracks.
-      const finished = state.paused && state.position === 0 && currentTrackId &&
-        state.track_window.previous_tracks.some(t => t.id === currentTrackId);
+      if (isOurTrack(state.track_window.current_track) && state.position > 0) lastPositionMs = state.position;
+
+      // A track finished: paused at 0, our track moved into previous_tracks, and we had
+      // actually reached its end (so a buffering stall or device switch doesn't skip).
+      const finished = state.paused && state.position === 0 && !state.loading &&
+        state.track_window.previous_tracks.some(isOurTrack) &&
+        prevDuration > 0 && prevPosition >= prevDuration - 15000;
       if (finished) advance();
     }
 
@@ -297,10 +321,14 @@
 
     function connectWebSocket() {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(`${proto}//${location.host}?venue=${encodeURIComponent(slug)}`);
+      ws = new WebSocket(`${proto}//${location.host}?venue=${encodeURIComponent(slug)}&role=player`);
 
       ws.onmessage = (event) => {
         const message = JSON.parse(event.data);
+        if (message.type === 'player_replaced') {
+          replaced = true;
+          return;
+        }
         if (message.type === 'init') {
           syncPlayback(message.nowPlaying);
           // Nothing playing but songs waiting: kick things off.
@@ -312,14 +340,29 @@
         }
       };
 
-      ws.onclose = () => setTimeout(connectWebSocket, 3000);
+      ws.onclose = (event) => {
+        if (replaced || event.code === 4000) {
+          if (spotifyPlayer) { spotifyPlayer.disconnect(); spotifyPlayer = null; }
+          clearInterval(progressInterval);
+          deviceId = null;
+          $('replacedBox').classList.remove('qp-hidden');
+          show('startGate');
+          return;
+        }
+        if (event.code === 4001) { show('authGate'); return; }
+        setTimeout(connectWebSocket, 3000);
+      };
     }
 
     async function advance(manual = false) {
       if (advancing) return;
       advancing = true;
       try {
-        await api('/play-next', { method: 'POST' });
+        await api('/play-next', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ current: currentSongKey || '' })
+        });
         if (manual) showToast('Skipped');
       } catch (err) {
         showToast(err.message, 'error');
@@ -348,6 +391,7 @@
       if (key === currentSongKey) return; // already playing this (e.g. WS reconnect)
       currentSongKey = key;
       currentTrackId = song.song_id;
+      lastPositionMs = 0;
 
       try {
         const token = await getSpotifyToken();

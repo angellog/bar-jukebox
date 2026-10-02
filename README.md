@@ -28,7 +28,7 @@ Requires Node 20+ and PostgreSQL. The schema is created automatically on boot.
 
 ## Deploy (Railway)
 
-The Railway project `queueplay-jukebox` has two services: `queueplay-jukebox` (this app) and `Postgres`. The app service is connected to `angellog/bar-jukebox` on `main`, so **every push to `main` deploys automatically**.
+The Railway project `queueplay-jukebox` has two services: `queueplay-jukebox` (this app) and `Postgres`. The app service is connected to `angellog/bar-jukebox` on `main`, so pushes to `main` *should* deploy automatically, but as of Oct 2026 the GitHub webhook isn't firing; until Railway's GitHub app is granted access to this repo, trigger a deploy from the Railway dashboard (or reconnect the source).
 
 Required variables: `DATABASE_URL` (reference `${{Postgres.DATABASE_URL}}`), `BASE_URL`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SUPER_ADMIN_KEY`, `SALT`. Health check: `GET /api/health`.
 
@@ -42,6 +42,12 @@ In the Spotify developer dashboard, the redirect URI must be exactly `${BASE_URL
 npm run smoke -- http://localhost:3000                       # read-only checks
 SUPER_ADMIN_KEY=... npm run smoke -- <url>                    # also registers, exercises, then deletes a test venue
 ```
+
+## Limits (who can use it)
+
+- **Guests:** no cap on how many people can scan and add songs. Each phone is limited by the venue's Settings → Guest Rate Limits (cooldown, songs per day) and the queue size.
+- **Venues:** no cap in the app. The real limit is Spotify: each venue connects its own Spotify Premium account, and while the Spotify app is in Development Mode only **5 Spotify accounts** can connect, so **5 venues**. One Spotify account can't power two venues at once (Spotify plays on one device per account).
+- **Players:** one player tab per venue. Opening a second one takes over and idles the first.
 
 ## Security notes
 

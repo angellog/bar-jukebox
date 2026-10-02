@@ -24,7 +24,9 @@ function check(name, ok, detail = '') {
 // Minimal cookie jar per simulated browser
 function client() {
   const jar = {};
-  return async function req(path, { method = 'GET', body, headers = {}, redirect = 'follow' } = {}) {
+  req.cookieHeader = () => Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; ');
+  return req;
+  async function req(path, { method = 'GET', body, headers = {}, redirect = 'follow' } = {}) {
     const cookie = Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; ');
     const res = await fetch(BASE + path, {
       method,
@@ -47,6 +49,20 @@ function client() {
     try { json = JSON.parse(text); } catch {}
     return { status: res.status, json, text, headers: res.headers };
   };
+}
+
+// Opens a player-role socket; resolves with { ws, events[], closed: Promise<code> }.
+function openPlayer(venue, cookie) {
+  return new Promise(resolve => {
+    const url = BASE.replace(/^http/, 'ws') + `?venue=${encodeURIComponent(venue)}&role=player`;
+    const ws = new WebSocket(url, { headers: cookie ? { Cookie: cookie } : {} });
+    const events = [];
+    const closed = new Promise(r => ws.on('close', code => r(code)));
+    ws.on('message', m => events.push(JSON.parse(String(m))));
+    ws.on('open', () => setTimeout(() => resolve({ ws, events, closed }), 500));
+    ws.on('error', () => resolve({ ws, events, closed }));
+    closed.then(() => resolve({ ws, events, closed }));
+  });
 }
 
 function wsInit(venue) {
@@ -145,6 +161,16 @@ async function main() {
     const ws = await wsInit(slug);
     check('WebSocket by slug', ws?.type === 'init');
 
+    const anonPlayer = await openPlayer(slug, null);
+    check('player socket requires login', (await anonPlayer.closed) === 4001);
+
+    const p1 = await openPlayer(slug, owner.cookieHeader());
+    const p2 = await openPlayer(slug, owner.cookieHeader());
+    const p1Code = await Promise.race([p1.closed, new Promise(r => setTimeout(() => r(null), 3000))]);
+    check('second player replaces the first', p1Code === 4000 && p1.events.some(e => e.type === 'player_replaced'));
+    check('second player stays connected', p2.ws.readyState === WebSocket.OPEN);
+    p2.ws.close();
+
     if (!canQueue) {
       console.log('   (queue tests skipped: needs Spotify search, i.e. a connected venue or extended-quota app)');
       return;
@@ -161,8 +187,12 @@ async function main() {
     const dup = await guestB(`/api/venue/${slug}/queue`, { method: 'POST', body: { songId: TEST_TRACK } });
     check('duplicate song blocked', dup.status === 409);
 
-    const next = await owner(`/api/venue/${slug}/play-next`, { method: 'POST' });
+    const next = await owner(`/api/venue/${slug}/play-next`, { method: 'POST', body: { current: '' } });
     check('play-next starts song', next.status === 200 && next.json?.nowPlaying?.song_id === TEST_TRACK);
+
+    // Two players racing to advance from the same (now stale) state must not double-skip.
+    const stale = await owner(`/api/venue/${slug}/play-next`, { method: 'POST', body: { current: '' } });
+    check('stale play-next does not skip', stale.status === 200 && stale.json?.advanced === false && stale.json?.nowPlaying?.song_id === TEST_TRACK);
 
     const empty = await owner(`/api/venue/${slug}/play-next`, { method: 'POST' });
     check('play-next on empty queue', empty.status === 200 && empty.json?.nowPlaying === null);
