@@ -70,6 +70,10 @@
         <strong>The player was opened in another tab or device.</strong>
         <p class="qp-text-secondary qp-text-sm qp-mt-xs">Only one player can run per venue, otherwise Spotify keeps switching between them. Tap below to play from this one instead.</p>
       </div>
+      <div id="deviceModeBox" class="qp-hidden qp-mb-md" style="padding:1rem; border-radius:var(--qp-radius); background:rgba(139,92,246,.12); border:1px solid rgba(139,92,246,.35); text-align:left">
+        <strong>This venue plays through a Spotify speaker: <span id="deviceModeName"></span></strong>
+        <p class="qp-text-secondary qp-text-sm qp-mt-xs">Starting here switches music to this browser instead.</p>
+      </div>
       <button id="startBtn" class="qp-btn qp-btn-primary qp-w-full">Start Player</button>
       <button id="logoutBtn" class="qp-btn qp-btn-secondary qp-w-full qp-mt-md">Use a different venue password</button>
     </div>
@@ -118,6 +122,8 @@
 
   <script src="https://sdk.scdn.co/spotify-player.js"></script>
   <script>
+    // The server's playback engine decides what plays. This page is just a
+    // Spotify device (Web Playback SDK) plus a now-playing display.
     const slug = window.location.pathname.split('/').filter(Boolean).pop();
     localStorage.removeItem(`qp_player_key_${slug}`); // legacy
     let spotifyPlayer = null;
@@ -128,12 +134,8 @@
     let trackProgressMs = 0;
     let trackDurationMs = 0;
     let isPlaying = false;
-    let currentSongKey = null;   // song_id + started_at of the track we started
-    let currentTrackId = null;   // Spotify track id actually loaded
-    let advancing = false;       // guards against double play-next
-    let pendingSong = undefined; // now_playing received before device was ready
-    let lastPositionMs = 0;      // last known position, to tell a real track end from a stall
-    let replaced = false;        // another tab/device took over as the venue's player
+    let replaced = false;
+    let engineStatus = { running: false, paused: false };
 
     const $ = id => document.getElementById(id);
 
@@ -155,7 +157,10 @@
     function setStatus(html) { $('spotifyStatusText').innerHTML = html; }
 
     async function api(path, options = {}) {
-      const res = await fetch(`/api/venue/${slug}${path}`, options);
+      const res = await fetch(`/api/venue/${slug}${path}`, {
+        ...options,
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
+      });
       const data = await res.json().catch(() => ({}));
       if (res.status === 401) {
         show('authGate');
@@ -163,10 +168,6 @@
       }
       if (!res.ok) throw new Error(data.error || 'Request failed');
       return data;
-    }
-
-    async function getSpotifyToken() {
-      return (await api('/spotify-token')).token;
     }
 
     $('authForm').addEventListener('submit', async (e) => {
@@ -183,7 +184,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Invalid password');
         show('startGate');
-        checkSpotifyConnected();
+        checkVenue();
       } catch (err) {
         showToast(err.message, 'error');
       } finally {
@@ -197,25 +198,38 @@
       show('authGate');
     });
 
-    $('startBtn').addEventListener('click', () => {
+    $('startBtn').addEventListener('click', async () => {
       if (!sdkReady) {
         showToast('Spotify player is still loading, try again in a second', 'error');
+        return;
+      }
+      // Starting the browser player means this browser is the venue's speaker.
+      try {
+        await api('/admin/playback', { method: 'PUT', body: JSON.stringify({ mode: 'browser' }) });
+      } catch (err) {
+        showToast(err.message, 'error');
         return;
       }
       startPlayer();
     });
 
     $('playBtn').addEventListener('click', async () => {
-      if (!spotifyPlayer) return;
-      const state = await spotifyPlayer.getCurrentState();
-      if (!state && !currentSongKey) {
-        advance();
-        return;
+      try {
+        const action = engineStatus.running && !engineStatus.paused && isPlaying ? 'pause' : 'resume';
+        await api(`/admin/music/${action}`, { method: 'POST' });
+      } catch (err) {
+        showToast(err.message, 'error');
       }
-      spotifyPlayer.togglePlay();
     });
 
-    $('skipBtn').addEventListener('click', () => advance(true));
+    $('skipBtn').addEventListener('click', async () => {
+      try {
+        await api('/admin/music/skip', { method: 'POST' });
+        showToast('Skipped');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
 
     window.onSpotifyWebPlaybackSDKReady = () => { sdkReady = true; };
 
@@ -225,15 +239,13 @@
       if (spotifyPlayer) { spotifyPlayer.disconnect(); spotifyPlayer = null; }
       if (ws) { ws.onclose = null; ws.close(); ws = null; }
       deviceId = null;
-      currentSongKey = null;
-      currentTrackId = null;
       show('playerSection');
       setStatus('Connecting to Spotify...');
 
       spotifyPlayer = new Spotify.Player({
         name: `QueuePlay (${slug})`,
         getOAuthToken: cb => {
-          getSpotifyToken().then(cb).catch(err => {
+          api('/spotify-token').then(d => cb(d.token)).catch(err => {
             showToast(err.message, 'error');
             setStatus('🔴 Spotify is not connected. Connect it from the admin dashboard.');
           });
@@ -254,15 +266,25 @@
       });
       spotifyPlayer.addListener('playback_error', ({ message }) => showToast(message, 'error'));
 
-      spotifyPlayer.addListener('player_state_changed', handleStateChange);
+      spotifyPlayer.addListener('player_state_changed', state => {
+        if (!state) return;
+        isPlaying = !state.paused;
+        $('playBtn').textContent = isPlaying ? '⏸️' : '▶️';
+        trackProgressMs = state.position;
+        trackDurationMs = state.duration;
+        updateProgressUI();
+        if (isPlaying) startProgressTicker(); else clearInterval(progressInterval);
+      });
 
-      spotifyPlayer.addListener('ready', ({ device_id }) => {
+      spotifyPlayer.addListener('ready', async ({ device_id }) => {
         deviceId = device_id;
-        setStatus(`🟢 Live on <strong>QueuePlay (${slug})</strong>. Keep this tab open.`);
-        if (pendingSong !== undefined) {
-          const song = pendingSong;
-          pendingSong = undefined;
-          syncPlayback(song);
+        setStatus('🟡 Starting music...');
+        try {
+          const data = await api('/player/device', { method: 'POST', body: JSON.stringify({ deviceId }) });
+          renderEngineStatus(data.status);
+        } catch (err) {
+          showToast(err.message, 'error');
+          setStatus('🔴 Could not start playback on this browser.');
         }
       });
 
@@ -275,37 +297,11 @@
       connectWebSocket();
     }
 
-    function isOurTrack(t) {
-      // Spotify may play a market-relinked copy with a different id.
-      return t && currentTrackId && (t.id === currentTrackId || (t.linked_from && t.linked_from.id === currentTrackId));
-    }
-
-    function handleStateChange(state) {
-      if (!state) return;
-      const prevPosition = Math.max(lastPositionMs, trackProgressMs);
-      const prevDuration = trackDurationMs;
-      isPlaying = !state.paused;
-      $('playBtn').textContent = isPlaying ? '⏸️' : '▶️';
-
-      trackProgressMs = state.position;
-      trackDurationMs = state.duration;
-      updateProgressUI();
-
-      if (isPlaying) startProgressTicker();
-      else clearInterval(progressInterval);
-
-      if (isOurTrack(state.track_window.current_track) && state.position > 0) lastPositionMs = state.position;
-
-      // A track finished: paused at 0, our track moved into previous_tracks, and we had
-      // actually reached its end (so a buffering stall or device switch doesn't skip).
-      const reachedEnd = prevDuration > 0 && prevPosition >= prevDuration - 15000;
-      const ourTrackDone = state.track_window.previous_tracks.some(isOurTrack);
-      const finished = !state.loading && ourTrackDone && reachedEnd && (
-        (state.paused && state.position === 0) ||
-        // Spotify autoplay moved on to a recommendation: take back control with our queue.
-        !isOurTrack(state.track_window.current_track)
-      );
-      if (finished) advance();
+    function renderEngineStatus(status) {
+      if (!status) return;
+      engineStatus = status;
+      const icon = { playing: '🟢', paused: '⏸️', idle: '🟡', stopped: '⚪' }[status.state] || '🔴';
+      setStatus(`${icon} ${escapeHTML(status.message || '')}. Keep this tab open.`);
     }
 
     function startProgressTicker() {
@@ -337,20 +333,16 @@
 
       ws.onmessage = (event) => {
         const message = JSON.parse(event.data);
-        if (message.type === 'player_replaced') {
-          replaced = true;
-          return;
-        }
+        if (message.type === 'player_replaced') { replaced = true; return; }
         if (message.type === 'init') {
           renderUpNext(message.queue || []);
-          syncPlayback(message.nowPlaying);
-          // Nothing playing but songs waiting: kick things off.
-          if (!message.nowPlaying && message.queue && message.queue.length > 0) advance();
+          renderSong(message.nowPlaying);
         } else if (message.type === 'now_playing') {
-          syncPlayback(message.data);
+          renderSong(message.data);
         } else if (message.type === 'queue_updated') {
           renderUpNext(message.data.queue);
-          if (!currentSongKey && message.data.queue.length > 0 && deviceId) advance();
+        } else if (message.type === 'engine_status') {
+          renderEngineStatus(message.data);
         }
       };
 
@@ -366,62 +358,6 @@
         if (event.code === 4001) { show('authGate'); return; }
         setTimeout(connectWebSocket, 3000);
       };
-    }
-
-    async function advance(manual = false) {
-      if (advancing) return;
-      advancing = true;
-      try {
-        await api('/play-next', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ current: currentSongKey || '' })
-        });
-        if (manual) showToast('Skipped');
-      } catch (err) {
-        showToast(err.message, 'error');
-      } finally {
-        setTimeout(() => { advancing = false; }, 1500);
-      }
-    }
-
-    async function syncPlayback(song) {
-      if (!deviceId) {
-        pendingSong = song;
-        renderSong(song);
-        return;
-      }
-
-      renderSong(song);
-
-      if (!song) {
-        currentSongKey = null;
-        currentTrackId = null;
-        if (spotifyPlayer && isPlaying) spotifyPlayer.pause();
-        return;
-      }
-
-      const key = `${song.song_id}|${song.started_at}`;
-      if (key === currentSongKey) return; // already playing this (e.g. WS reconnect)
-      currentSongKey = key;
-      currentTrackId = song.song_id;
-      lastPositionMs = 0;
-
-      try {
-        const token = await getSpotifyToken();
-        const uri = song.spotify_uri || `spotify:track:${song.song_id}`;
-        const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
-          method: 'PUT',
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uris: [uri] })
-        });
-        if (!res.ok && res.status !== 204) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error?.message || `Spotify refused playback (${res.status})`);
-        }
-      } catch (err) {
-        showToast(err.message, 'error');
-      }
     }
 
     function escapeHTML(str) {
@@ -453,35 +389,35 @@
         $('nowPlayingTitle').textContent = 'Nothing Playing';
         $('nowPlayingArtist').textContent = 'Waiting for guests to add songs';
         $('nowPlayingArt').src = '/assets/music-placeholder.svg';
-        trackProgressMs = 0;
-        trackDurationMs = 0;
-        updateProgressUI();
         return;
       }
       $('nowPlayingTitle').textContent = song.title;
-      $('nowPlayingArtist').textContent = song.artist;
+      $('nowPlayingArtist').textContent = song.source === 'background' ? `${song.artist} · background music` : song.artist;
       $('nowPlayingArt').src = song.album_art || '/assets/music-placeholder.svg';
       document.title = `${song.title} · QueuePlay`;
     }
 
-    async function checkSpotifyConnected() {
+    async function checkVenue() {
       try {
         const v = await (await fetch(`/api/venue/${slug}`)).json();
         const connected = !!v.spotify_connected;
         $('notConnectedBox').classList.toggle('qp-hidden', connected);
         $('startBtn').classList.toggle('qp-hidden', !connected);
         $('connectSpotifyLink').href = `/auth/spotify/connect/${slug}?return=player`;
-        return connected;
-      } catch {
-        return true;
-      }
+        if (connected) {
+          const m = await api('/admin/music');
+          const deviceMode = m.playback.mode === 'device' && m.playback.deviceName;
+          $('deviceModeBox').classList.toggle('qp-hidden', !deviceMode);
+          if (deviceMode) $('deviceModeName').textContent = m.playback.deviceName;
+        }
+      } catch {}
     }
 
     fetch(`/api/venue/${slug}/admin/session`)
       .then(r => r.json())
       .then(d => {
         show(d.authenticated ? 'startGate' : 'authGate');
-        if (d.authenticated) checkSpotifyConnected();
+        if (d.authenticated) checkVenue();
       })
       .catch(() => show('authGate'));
   </script>

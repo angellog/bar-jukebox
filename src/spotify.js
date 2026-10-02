@@ -10,6 +10,19 @@ async function spotifyError(prefix, response) {
   return err;
 }
 
+function trackFromApi(track) {
+  return {
+    id: track.id,
+    title: track.name,
+    artist: (track.artists || []).map(a => a.name).join(', '),
+    album: track.album?.name || '',
+    albumArt: track.album?.images?.[0]?.url || '',
+    durationMs: track.duration_ms,
+    uri: track.uri,
+    explicit: !!track.explicit
+  };
+}
+
 class SpotifyService {
   constructor(clientId, clientSecret, redirectUri) {
     this.clientId = clientId;
@@ -59,7 +72,9 @@ class SpotifyService {
       'user-read-private',
       'user-read-playback-state',
       'user-modify-playback-state',
-      'user-read-currently-playing'
+      'user-read-currently-playing',
+      'playlist-read-private',
+      'playlist-read-collaborative'
     ].join(' ');
 
     const params = new URLSearchParams({
@@ -190,42 +205,88 @@ class SpotifyService {
   }
 
   // ============================================
-  // PLAYBACK CONTROL (venue's Spotify account)
+  // PLAYBACK CONTROL (venue's Spotify account, OAuth token)
   // ============================================
 
-  async play(accessToken, uri, deviceId) {
-    const body = { uris: [uri] };
-    const url = deviceId
-      ? `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`
-      : 'https://api.spotify.com/v1/me/player/play';
-
-    const response = await fetch(url, {
-      method: 'PUT',
+  // Generic user-token call. Returns parsed JSON, or null for 204/empty.
+  // Throws an Error with .status (and .retryAfter for 429).
+  async userApi(token, method, path, { query, body } = {}) {
+    const qs = query ? '?' + new URLSearchParams(Object.entries(query).filter(([, v]) => v !== undefined && v !== null)) : '';
+    const response = await fetch(`https://api.spotify.com/v1${path}${qs}`, {
+      method,
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
+        'Authorization': `Bearer ${token}`,
+        ...(body ? { 'Content-Type': 'application/json' } : {})
       },
-      body: JSON.stringify(body)
+      body: body ? JSON.stringify(body) : undefined
     });
-
-    return response.ok;
+    if (response.status === 204 || response.status === 202) return null;
+    if (!response.ok) {
+      const err = await spotifyError(`${method} ${path} failed`, response);
+      err.retryAfter = parseInt(response.headers.get('retry-after') || '0', 10);
+      throw err;
+    }
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
   }
 
-  async pause(accessToken) {
-    const response = await fetch('https://api.spotify.com/v1/me/player/pause', {
-      method: 'PUT',
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
-    return response.ok;
+  getPlaybackState(token) {
+    return this.userApi(token, 'GET', '/me/player', { query: { additional_types: 'track' } });
   }
 
-  async getPlaybackState(accessToken) {
-    const response = await fetch('https://api.spotify.com/v1/me/player', {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
+  async getDevices(token) {
+    const data = await this.userApi(token, 'GET', '/me/player/devices');
+    return (data && data.devices) || [];
+  }
+
+  transfer(token, deviceId, play = false) {
+    return this.userApi(token, 'PUT', '/me/player', { body: { device_ids: [deviceId], play } });
+  }
+
+  // Either { uris: [...] } or { context_uri } (playlist), optionally offset/position_ms.
+  play(token, deviceId, body) {
+    return this.userApi(token, 'PUT', '/me/player/play', { query: { device_id: deviceId || undefined }, body: body || undefined });
+  }
+
+  pause(token, deviceId) {
+    return this.userApi(token, 'PUT', '/me/player/pause', { query: { device_id: deviceId || undefined } });
+  }
+
+  next(token, deviceId) {
+    return this.userApi(token, 'POST', '/me/player/next', { query: { device_id: deviceId || undefined } });
+  }
+
+  addToQueue(token, uri, deviceId) {
+    return this.userApi(token, 'POST', '/me/player/queue', { query: { uri, device_id: deviceId || undefined } });
+  }
+
+  setShuffle(token, state, deviceId) {
+    return this.userApi(token, 'PUT', '/me/player/shuffle', { query: { state: String(state), device_id: deviceId || undefined } });
+  }
+
+  async getMyPlaylists(token) {
+    const data = await this.userApi(token, 'GET', '/me/playlists', { query: { limit: 50 } });
+    return ((data && data.items) || []).filter(Boolean).map(p => ({
+      uri: p.uri,
+      name: p.name,
+      image: p.images?.[0]?.url || '',
+      tracks: p.items?.total ?? p.tracks?.total ?? null
+    }));
+  }
+
+  async getPlaylist(token, playlistId) {
+    const p = await this.userApi(token, 'GET', `/playlists/${encodeURIComponent(playlistId)}`, { query: { fields: 'name,uri,images' } });
+    return { uri: p.uri, name: p.name, image: p.images?.[0]?.url || '' };
+  }
+
+  // Genre-filtered track search for background music. Search is capped at 10 per page.
+  async searchByGenre(token, genre, offset = 0) {
+    const data = await this.userApi(token, 'GET', '/search', {
+      query: { q: `genre:"${genre}"`, type: 'track', limit: 10, offset, market: 'from_token' }
     });
-    if (!response.ok || response.status === 204) return null;
-    return response.json();
+    return ((data && data.tracks && data.tracks.items) || []).map(trackFromApi);
   }
 }
 
 module.exports = SpotifyService;
+module.exports.trackFromApi = trackFromApi;
