@@ -12,6 +12,7 @@ const WebSocket = require('ws');
 const BASE = (process.argv[2] || 'http://localhost:3000').replace(/\/$/, '');
 const SUPER_KEY = process.env.SUPER_ADMIN_KEY;
 const TEST_TRACK = '0DiWol3AO6WpXZgp0goxAV'; // Daft Punk - One More Time
+const TEST_TRACK_2 = '4uLU6hMCjMI75M1A2tKUQC'; // Rick Astley - Never Gonna Give You Up
 
 let passed = 0;
 let failed = 0;
@@ -193,6 +194,21 @@ async function main() {
     // Two players racing to advance from the same (now stale) state must not double-skip.
     const stale = await owner(`/api/venue/${slug}/play-next`, { method: 'POST', body: { current: '' } });
     check('stale play-next does not skip', stale.status === 200 && stale.json?.advanced === false && stale.json?.nowPlaying?.song_id === TEST_TRACK);
+
+    // A guest adds a song while one is playing: it must queue up, not interrupt.
+    const guestC = client();
+    const addWhilePlaying = await guestC(`/api/venue/${slug}/queue`, { method: 'POST', body: { songId: TEST_TRACK_2 } });
+    check('song added while playing is queued', addWhilePlaying.status === 200 && addWhilePlaying.json?.position === 1, addWhilePlaying.json?.error);
+    const npAfterAdd = await anon(`/api/venue/${slug}/now-playing`);
+    check('current song keeps playing after an add', npAfterAdd.json?.nowPlaying?.song_id === TEST_TRACK);
+    // The player's "queue changed" reaction (current = '') must not skip the playing song.
+    const raceSkip = await owner(`/api/venue/${slug}/play-next`, { method: 'POST', body: { current: '' } });
+    check('queue update does not skip current song', raceSkip.json?.advanced === false);
+
+    // When the current song really ends, the next one plays in the order added.
+    const endKey = `${npAfterAdd.json.nowPlaying.song_id}|${new Date(npAfterAdd.json.nowPlaying.started_at).toISOString()}`;
+    const advanceInOrder = await owner(`/api/venue/${slug}/play-next`, { method: 'POST', body: { current: endKey } });
+    check('next song plays in order added', advanceInOrder.json?.advanced === true && advanceInOrder.json?.nowPlaying?.song_id === TEST_TRACK_2);
 
     const empty = await owner(`/api/venue/${slug}/play-next`, { method: 'POST' });
     check('play-next on empty queue', empty.status === 200 && empty.json?.nowPlaying === null);

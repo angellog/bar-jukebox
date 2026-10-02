@@ -103,6 +103,14 @@
 
         <div class="device-status" id="spotifyStatusText">Connecting to Spotify...</div>
       </div>
+
+      <div class="qp-card qp-mt-lg" style="text-align:left; padding:1.25rem">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.75rem">
+          <h3 style="font-weight:600; font-size:1rem">Up next</h3>
+          <span class="qp-text-xs qp-text-muted" id="upNextCount">0 songs</span>
+        </div>
+        <div id="upNextList" class="qp-text-sm qp-text-muted">Nothing queued yet. Guests can add songs from the QR code.</div>
+      </div>
     </div>
   </div>
 
@@ -290,9 +298,13 @@
 
       // A track finished: paused at 0, our track moved into previous_tracks, and we had
       // actually reached its end (so a buffering stall or device switch doesn't skip).
-      const finished = state.paused && state.position === 0 && !state.loading &&
-        state.track_window.previous_tracks.some(isOurTrack) &&
-        prevDuration > 0 && prevPosition >= prevDuration - 15000;
+      const reachedEnd = prevDuration > 0 && prevPosition >= prevDuration - 15000;
+      const ourTrackDone = state.track_window.previous_tracks.some(isOurTrack);
+      const finished = !state.loading && ourTrackDone && reachedEnd && (
+        (state.paused && state.position === 0) ||
+        // Spotify autoplay moved on to a recommendation: take back control with our queue.
+        !isOurTrack(state.track_window.current_track)
+      );
       if (finished) advance();
     }
 
@@ -330,12 +342,14 @@
           return;
         }
         if (message.type === 'init') {
+          renderUpNext(message.queue || []);
           syncPlayback(message.nowPlaying);
           // Nothing playing but songs waiting: kick things off.
           if (!message.nowPlaying && message.queue && message.queue.length > 0) advance();
         } else if (message.type === 'now_playing') {
           syncPlayback(message.data);
         } else if (message.type === 'queue_updated') {
+          renderUpNext(message.data.queue);
           if (!currentSongKey && message.data.queue.length > 0 && deviceId) advance();
         }
       };
@@ -408,6 +422,30 @@
       } catch (err) {
         showToast(err.message, 'error');
       }
+    }
+
+    function escapeHTML(str) {
+      return String(str || '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
+    }
+
+    // Songs play in the order guests added them (queue position).
+    function renderUpNext(queue) {
+      $('upNextCount').textContent = `${queue.length} song${queue.length === 1 ? '' : 's'}`;
+      $('upNextList').className = queue.length ? '' : 'qp-text-sm qp-text-muted';
+      if (!queue.length) {
+        $('upNextList').innerHTML = 'Nothing queued yet. Guests can add songs from the QR code.';
+        return;
+      }
+      $('upNextList').innerHTML = queue.map((song, i) => `
+        <div class="qp-song-row" style="cursor:default; grid-template-columns:auto auto 1fr; margin-bottom:.5rem">
+          <div class="qp-queue-pos">${i + 1}</div>
+          <img class="qp-song-art" src="${escapeHTML(song.album_art) || '/assets/music-placeholder.svg'}" alt="">
+          <div class="qp-song-meta">
+            <div class="qp-song-title">${escapeHTML(song.title)}</div>
+            <div class="qp-song-artist">${escapeHTML(song.artist)}${song.guest_name ? ` · added by ${escapeHTML(song.guest_name)}` : ''}</div>
+          </div>
+        </div>
+      `).join('');
     }
 
     function renderSong(song) {
