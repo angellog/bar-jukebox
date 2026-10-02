@@ -28,11 +28,7 @@ Requires Node 20+ and PostgreSQL. The schema is created automatically on boot.
 
 ## Deploy (Railway)
 
-The Railway project `queueplay-jukebox` has two services: `queueplay-jukebox` (this app) and `Postgres`. Deploy from the linked folder:
-
-```bash
-railway up --service queueplay-jukebox
-```
+The Railway project `queueplay-jukebox` has two services: `queueplay-jukebox` (this app) and `Postgres`. The app service is connected to `angellog/bar-jukebox` on `main`, so **every push to `main` deploys automatically**.
 
 Required variables: `DATABASE_URL` (reference `${{Postgres.DATABASE_URL}}`), `BASE_URL`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SUPER_ADMIN_KEY`, `SALT`. Health check: `GET /api/health`.
 
