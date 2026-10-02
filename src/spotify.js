@@ -226,8 +226,15 @@ class SpotifyService {
       err.retryAfter = parseInt(response.headers.get('retry-after') || '0', 10);
       throw err;
     }
+    // Some player endpoints (e.g. POST /me/player/queue) answer 200 with a
+    // plain-text id instead of JSON. The call succeeded; don't treat it as an error.
     const text = await response.text();
-    return text ? JSON.parse(text) : null;
+    if (!text) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
   }
 
   getPlaybackState(token) {
