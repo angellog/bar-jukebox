@@ -316,6 +316,19 @@ app.get('/pricing', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'pricing.html'));
 });
 
+app.get('/guide', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'guide.html'));
+});
+
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'login.html'));
+});
+
+// Public, non-secret settings the static pages need.
+app.get('/api/public-config', (req, res) => {
+  res.json({ supportEmail: process.env.SUPPORT_EMAIL || null });
+});
+
 app.get('/register', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'register.html'));
 });
@@ -829,7 +842,7 @@ app.post('/api/venue/:venueSlug/player/device', resolveVenue, venueAdminAuth, as
 
 app.post('/api/register', async (req, res) => {
   try {
-    const { name, type, email, password, slug } = req.body;
+    const { name, type, email, password, slug, spotifyEmail } = req.body;
     if (!name || !password) return res.status(400).json({ error: 'Name and password required' });
     if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
@@ -842,6 +855,7 @@ app.post('/api/register', async (req, res) => {
       name,
       type: type || 'cafe',
       email,
+      spotify_email: typeof spotifyEmail === 'string' && /^\S+@\S+\.\S+$/.test(spotifyEmail.trim()) ? spotifyEmail.trim().slice(0, 200) : null,
       slug: desiredSlug,
       password_hash: hashPassword(password)
     });

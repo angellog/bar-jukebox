@@ -168,6 +168,9 @@ class QueuePlayDB {
       ALTER TABLE venues ADD COLUMN IF NOT EXISTS autofill_playlist_name TEXT;
       ALTER TABLE now_playing ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'guest';
       ALTER TABLE now_playing ADD COLUMN IF NOT EXISTS queue_id INTEGER;
+
+      -- Onboarding (v1.2): Spotify account to allowlist while the app is in Development Mode
+      ALTER TABLE venues ADD COLUMN IF NOT EXISTS spotify_email TEXT;
     `);
 
     await this.seedSubscriptionPlans();
@@ -211,8 +214,8 @@ class QueuePlayDB {
     const adminKey = uuidv4();
 
     await this.pool.query(
-      `INSERT INTO venues (id, slug, name, type, email, phone, address, plan_id, admin_password_hash, admin_key, page_title, welcome_message)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      `INSERT INTO venues (id, slug, name, type, email, phone, address, plan_id, admin_password_hash, admin_key, page_title, welcome_message, spotify_email)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
       [
         id, slug, data.name, data.type || 'cafe',
         data.email || null, data.phone || null, data.address || null,
@@ -220,7 +223,8 @@ class QueuePlayDB {
         data.password_hash,
         adminKey,
         data.name,
-        data.welcome_message || 'Search, add, and enjoy music together'
+        data.welcome_message || 'Search, add, and enjoy music together',
+        data.spotify_email || null
       ]
     );
 

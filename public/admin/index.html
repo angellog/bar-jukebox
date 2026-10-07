@@ -41,6 +41,22 @@
       white-space: nowrap;
       transition: all var(--qp-transition);
     }
+    .check-item {
+      display: flex; align-items: center; gap: .65rem; width: 100%; text-align: left; cursor: pointer;
+      padding: .55rem .7rem; border-radius: var(--qp-radius-md); border: 1px solid transparent;
+      background: transparent; color: var(--qp-text-secondary); font: inherit; font-size: .88rem;
+    }
+    .check-item:hover { background: var(--qp-glass); border-color: var(--qp-glass-border); }
+    .check-item.done { color: #4ade80; }
+    .check-item .check-dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--qp-glass-border); display: flex; align-items: center; justify-content: center; font-size: .7rem; flex-shrink: 0; }
+    .check-item.done .check-dot { background: #4ade80; border-color: #4ade80; color: #0d0d14; }
+    .check-item .check-opt { margin-left: auto; font-size: .7rem; color: var(--qp-text-muted); }
+    .welcome-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
+    .welcome-modal { max-width: 520px; width: 100%; padding: 1.75rem; border-radius: var(--qp-radius-xl); background: var(--qp-bg-card, #17121f); border: 1px solid var(--qp-glass-border); box-shadow: var(--qp-shadow-lg); max-height: 90vh; overflow-y: auto; }
+    .welcome-steps { counter-reset: w; margin: 1rem 0 1.25rem; padding: 0; }
+    .welcome-steps li { list-style: none; counter-increment: w; display: flex; gap: .75rem; margin-bottom: .7rem; font-size: .9rem; color: var(--qp-text-secondary); line-height: 1.5; }
+    .welcome-steps li::before { content: counter(w); flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .8rem; color: #fff; background: linear-gradient(135deg,var(--qp-primary),var(--qp-secondary)); }
+    .welcome-steps strong { color: var(--qp-text); }
     .mode-option {
       display: flex; gap: .75rem; align-items: flex-start; cursor: pointer;
       padding: .75rem; border-radius: var(--qp-radius-md); border: 1px solid var(--qp-glass-border); margin-bottom: .5rem;
@@ -132,6 +148,7 @@
         <div class="admin-nav-item" data-target="config">⚙️ Settings</div>
         <div class="admin-nav-item" data-target="spotify">🔊 Music & Speaker</div>
         <div class="admin-nav-item" data-target="qr">📱 Branded QR Code</div>
+        <a href="/guide" target="_blank" class="admin-nav-item" style="display:block; text-decoration:none">📘 Setup Guide</a>
         <a id="playerPageLink" href="#" target="_blank" class="admin-nav-item" style="display:block; text-decoration:none; border: 1.5px dashed var(--qp-primary); color:var(--qp-primary-light)">▶️ Open Player</a>
       </aside>
 
@@ -141,19 +158,15 @@
         <section class="admin-panel active" id="panel-overview">
           <h2 class="qp-h3 qp-mb-lg">Active Performance</h2>
 
-          <div id="setupChecklist" class="qp-card qp-mb-lg" style="padding:1rem">
-            <h4 style="font-weight:600; margin-bottom:.75rem; font-size:.95rem">🚀 Setup Checklist</h4>
-            <div style="display:flex; flex-direction:column; gap:.5rem; font-size:.88rem">
-              <div id="checkSpotify" style="display:flex; align-items:center; gap:.5rem; color:var(--qp-text-secondary)">
-                <span id="checkSpotifyIcon">⏳</span> <a href="#" id="checkSpotifyLink" style="color:inherit; text-decoration:underline">Connect Spotify Premium account</a>
-              </div>
-              <div id="checkPlayer" style="display:flex; align-items:center; gap:.5rem; color:var(--qp-text-secondary)">
-                <span id="checkPlayerIcon">⏳</span> Open player page on your laptop
-              </div>
-              <div id="checkGuest" style="display:flex; align-items:center; gap:.5rem; color:var(--qp-text-secondary)">
-                <span id="checkGuestIcon">⏳</span> Guest adds a song via QR code
-              </div>
+          <div id="setupChecklist" class="qp-card qp-mb-lg" style="padding:1.1rem">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:.6rem">
+              <h4 style="font-weight:600; font-size:.95rem">🚀 Get set up <span id="checklistCount" class="qp-text-muted qp-text-xs"></span></h4>
+              <a href="/guide" target="_blank" class="qp-text-xs" style="text-decoration:underline">Full guide ↗</a>
             </div>
+            <div style="height:6px; border-radius:99px; background:var(--qp-glass); overflow:hidden; margin-bottom:.85rem">
+              <div id="checklistBar" style="height:100%; width:0; background:linear-gradient(90deg,var(--qp-primary),var(--qp-secondary)); transition:width .4s"></div>
+            </div>
+            <div id="checklistItems" style="display:flex; flex-direction:column; gap:.35rem"></div>
           </div>
 
           <div class="stats-grid">
@@ -442,6 +455,25 @@
     </div>
   </div>
 
+  <div id="welcomeModal" class="welcome-backdrop qp-hidden" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
+    <div class="welcome-modal">
+      <h2 id="welcomeTitle" class="qp-h3">Welcome to QueuePlay 🎶</h2>
+      <p class="qp-text-secondary qp-text-sm qp-mt-xs">Four steps and your guests can start picking songs. About 10 minutes.</p>
+      <ol class="welcome-steps">
+        <li><div><strong>Connect Spotify.</strong> Link the venue's Spotify Premium account in Music &amp; Speaker.</div></li>
+        <li><div><strong>Choose your speaker.</strong> A phone or tablet with Spotify on your sound system (no screen needed), a smart speaker, or a laptop with the Player page.</div></li>
+        <li><div><strong>Turn on background music</strong> so it never goes quiet. Guest requests always play next.</div></li>
+        <li><div><strong>Print your QR code</strong> and put it on tables and the bar. Then test with your phone.</div></li>
+      </ol>
+      <p class="qp-text-muted qp-text-xs qp-mb-md">The checklist on your Overview tab tracks your progress. Your links are in Settings.</p>
+      <div style="display:flex; gap:.5rem; flex-wrap:wrap">
+        <button type="button" id="welcomeStartBtn" class="qp-btn qp-btn-primary">Start setup →</button>
+        <a href="/guide" target="_blank" class="qp-btn qp-btn-secondary">Open the guide</a>
+        <button type="button" id="welcomeLaterBtn" class="qp-btn qp-btn-secondary" style="margin-left:auto">Later</button>
+      </div>
+    </div>
+  </div>
+
   <div class="qp-toast-container" id="toastContainer"></div>
 
   <script>
@@ -489,6 +521,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
 
+        store.set('qp_last_venue', slug);
         initDashboard();
       } catch (err) {
         const errBox = document.getElementById('loginError');
@@ -630,6 +663,68 @@
       }
     });
 
+    // ---------- Setup checklist & welcome ----------
+    let latestStats = null;
+    const QR_FLAG = `qp_qr_done_${slug}`;
+    const WELCOME_FLAG = `qp_welcomed_${slug}`;
+    const store = {
+      get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+      set(k, v) { try { localStorage.setItem(k, v); } catch {} }
+    };
+
+    function openPanel(target) {
+      const item = document.querySelector(`.admin-nav-item[data-target="${target}"]`);
+      if (item) item.click();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function renderChecklist() {
+      if (!venue) return;
+      const m = musicState;
+      const speakerChosen = !!(m && ((m.playback.mode === 'device' && m.playback.deviceId) || m.status.running));
+      const branded = !!(venue.logo_url || (venue.brand_primary && venue.brand_primary !== '#8b5cf6') ||
+        (venue.welcome_message && venue.welcome_message !== 'Search, add, and enjoy music together'));
+      const items = [
+        { label: 'Connect Spotify Premium', done: !!venue.spotify_connected, panel: 'spotify' },
+        { label: 'Choose your speaker and press Start music', done: speakerChosen, panel: 'spotify' },
+        { label: 'Turn on background music', done: !!(m && m.autofill.enabled), panel: 'spotify', optional: true },
+        { label: 'Add your logo and colours', done: branded, panel: 'branding', optional: true },
+        { label: 'Download or share your QR code', done: !!store.get(QR_FLAG), panel: 'qr' },
+        { label: 'First guest request', done: !!(latestStats && (latestStats.totalPlayed > 0 || latestStats.queueCount > 0)), panel: 'qr' }
+      ];
+      const doneCount = items.filter(i => i.done).length;
+      document.getElementById('checklistCount').textContent = `· ${doneCount} of ${items.length} done`;
+      document.getElementById('checklistBar').style.width = `${(doneCount / items.length) * 100}%`;
+      const box = document.getElementById('checklistItems');
+      box.innerHTML = items.map((it, i) => `
+        <button type="button" class="check-item${it.done ? ' done' : ''}" data-i="${i}">
+          <span class="check-dot">${it.done ? '✓' : ''}</span>
+          <span>${it.label}</span>
+          ${it.optional && !it.done ? '<span class="check-opt">optional</span>' : ''}
+        </button>`).join('');
+      box.querySelectorAll('.check-item').forEach(btn => {
+        btn.onclick = () => openPanel(items[btn.dataset.i].panel);
+      });
+      if (doneCount === items.length) {
+        box.innerHTML = '<p class="qp-text-sm" style="color:#4ade80">🎉 All set. Your venue is live. Keep the guide handy for staff.</p>';
+      }
+    }
+
+    function maybeShowWelcome() {
+      const forced = new URLSearchParams(location.search).get('welcome') === '1';
+      if (!forced && store.get(WELCOME_FLAG)) return;
+      document.getElementById('welcomeModal').classList.remove('qp-hidden');
+    }
+    function closeWelcome() {
+      store.set(WELCOME_FLAG, '1');
+      document.getElementById('welcomeModal').classList.add('qp-hidden');
+      if (location.search.includes('welcome=1')) history.replaceState(null, '', location.pathname);
+    }
+    document.getElementById('welcomeStartBtn').addEventListener('click', () => { closeWelcome(); openPanel('spotify'); });
+    document.getElementById('welcomeLaterBtn').addEventListener('click', closeWelcome);
+    document.getElementById('welcomeModal').addEventListener('click', (e) => { if (e.target.id === 'welcomeModal') closeWelcome(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeWelcome(); });
+
     // ---------- Music & Speaker ----------
     let musicState = null;
     let selectedGenres = [];
@@ -695,6 +790,7 @@
         renderGenres(musicState.genreOptions, af.defaultGenres);
         document.getElementById('playlistCurrent').textContent = af.playlistName ? `Current: ${af.playlistName}` : '';
         syncAutofillUI();
+        renderChecklist();
       } catch (err) {
         showToast(err.message, 'error');
       }
@@ -842,21 +938,8 @@
         document.getElementById('statToday').textContent = data.todayPlayed;
         document.getElementById('statGuests').textContent = data.activeGuests;
 
-        // Update checklist — guest step
-        const checkGuestIcon = document.getElementById('checkGuestIcon');
-        const checkGuestText = document.getElementById('checkGuest');
-        if (data.totalPlayed > 0 || data.queueCount > 0) {
-          checkGuestIcon.textContent = '✅';
-          checkGuestText.style.color = '#4ade80';
-        }
-
-        // Update checklist — player step (if now_playing exists and spotify connected)
-        const checkPlayerIcon = document.getElementById('checkPlayerIcon');
-        const checkPlayerText = document.getElementById('checkPlayer');
-        if (npData.nowPlaying) {
-          checkPlayerIcon.textContent = '✅';
-          checkPlayerText.style.color = '#4ade80';
-        }
+        latestStats = data;
+        renderChecklist();
 
         const list = document.getElementById('topSongsList');
         if (data.topSongs.length === 0) {
@@ -931,16 +1014,6 @@
         document.getElementById('playerPageLink').href = `/player/${slug}`;
         document.getElementById('playerPageLink2').href = `/player/${slug}`;
 
-        // Update setup checklist
-        const checkSpotifyIcon = document.getElementById('checkSpotifyIcon');
-        const checkSpotifyText = document.getElementById('checkSpotify');
-        if (venue.spotify_connected) {
-          checkSpotifyIcon.textContent = '✅';
-          checkSpotifyText.style.color = '#4ade80';
-        } else {
-          checkSpotifyIcon.textContent = '❌';
-        }
-
         // Branding
         document.getElementById('brandPageTitle').value = venue.page_title || '';
         document.getElementById('brandLogoUrl').value = venue.logo_url || '';
@@ -992,7 +1065,6 @@
         }
 
         document.getElementById('connectSpotifyBtn').href = `/auth/spotify/connect/${slug}`;
-        document.getElementById('checkSpotifyLink').href = venue.spotify_connected ? `/player/${slug}` : `/auth/spotify/connect/${slug}`;
 
         // QR Code details
         const qrRes = await fetch(`/api/venue/${slug}/qr`);
@@ -1001,6 +1073,8 @@
         document.getElementById('qrCodeUrlDisplay').innerHTML = `Public Guest URL:<br><a href="${qrData.url}" target="_blank" style="text-decoration:underline; font-family:monospace">${qrData.url}</a>`;
 
         document.getElementById('downloadQrBtn').onclick = () => {
+          store.set(QR_FLAG, '1');
+          renderChecklist();
           const a = document.createElement('a');
           a.href = qrData.qr;
           a.download = `qp-qr-${slug}.png`;
@@ -1008,6 +1082,8 @@
         };
 
         document.getElementById('copyUrlBtn').onclick = () => {
+          store.set(QR_FLAG, '1');
+          renderChecklist();
           navigator.clipboard.writeText(qrData.url);
           showToast('Guest link copied to clipboard!');
         };
@@ -1029,6 +1105,8 @@
       await loadStats();
       await loadQueue();
       await loadMusic();
+      renderChecklist();
+      maybeShowWelcome();
 
       // Refresh stats regularly
       if (window.__qpRefresh) clearInterval(window.__qpRefresh);

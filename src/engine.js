@@ -35,7 +35,9 @@ const VENUE_PRESETS = {
   club: ['amapiano', 'afro house', 'dancehall', 'hip hop'],
   hotel: ['smooth jazz', 'soul', 'chill', 'bossa nova'],
   gym: ['hip hop', 'dance pop', 'house', 'afrobeats'],
-  retail: ['pop', 'r&b', 'dance pop', 'afrobeats']
+  retail: ['pop', 'r&b', 'dance pop', 'afrobeats'],
+  garden: ['acoustic', 'chill', 'reggae', 'afrobeats'],
+  coworking: ['lo-fi', 'jazz', 'chill', 'acoustic']
 };
 
 function defaultGenres(venueType) {

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Log in to your QueuePlay venue dashboard.">
+  <title>Venue Log In · QueuePlay</title>
+  <link rel="stylesheet" href="/assets/design-system.css">
+  <style>
+    .nav{display:flex;justify-content:space-between;align-items:center;padding:1.25rem 0}
+    .nav-brand{display:flex;align-items:center;gap:.6rem;font-size:1.3rem;font-weight:700}
+    .nav-brand-icon{width:34px;height:34px;border-radius:var(--qp-radius-sm);background:linear-gradient(135deg,var(--qp-primary),var(--qp-secondary));display:flex;align-items:center;justify-content:center;font-size:1rem}
+    .slug-row{display:flex;align-items:center;border:1px solid var(--qp-glass-border);border-radius:var(--qp-radius-md);background:var(--qp-glass);overflow:hidden}
+    .slug-prefix{padding:0 .75rem;color:var(--qp-text-muted);font-size:.85rem;white-space:nowrap}
+    .slug-row input{border:none;background:transparent;border-radius:0;flex:1;min-width:0}
+    .error{color:#fb7185;font-size:.85rem;margin-top:.5rem;min-height:1.2em}
+  </style>
+</head>
+<body>
+  <div class="qp-container">
+    <nav class="nav">
+      <a href="/" class="nav-brand"><span class="nav-brand-icon">Q</span><span>QueuePlay</span></a>
+      <a href="/register" class="qp-btn qp-btn-secondary qp-btn-sm">Create a venue</a>
+    </nav>
+  </div>
+
+  <div class="qp-container-sm qp-mt-xl">
+    <div class="qp-card">
+      <h1 class="qp-h3 qp-mb-sm">Log in to your venue</h1>
+      <p class="qp-text-secondary qp-text-sm qp-mb-lg">Enter your venue's link name. It's the part after <code>/v/</code> in your guest link, e.g. <code>cloud-nine-lounge</code>.</p>
+      <form id="loginForm">
+        <label class="qp-label" for="slugInput">Venue link</label>
+        <div class="slug-row">
+          <span class="slug-prefix" id="slugPrefix">/admin/</span>
+          <input type="text" id="slugInput" class="qp-input" placeholder="your-venue" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+        </div>
+        <div class="error" id="error" role="alert"></div>
+        <button type="submit" class="qp-btn qp-btn-primary qp-w-full qp-mt-md">Continue</button>
+      </form>
+      <p class="qp-text-muted qp-text-xs qp-mt-lg">Forgot your venue link? It's in the welcome screen after sign-up and under Settings → Your Venue Links. You can also paste any of your QueuePlay links here.</p>
+    </div>
+  </div>
+
+  <script>
+    const input = document.getElementById('slugInput');
+    const error = document.getElementById('error');
+
+    try {
+      const last = localStorage.getItem('qp_last_venue');
+      if (last) input.value = last;
+    } catch {}
+
+    // Accept a bare slug, a venue name, or any QueuePlay link (/v/, /admin/, /player/).
+    function toSlug(value) {
+      const v = value.trim();
+      const m = v.match(/\/(?:v|admin|player)\/([a-z0-9-]+)/i);
+      if (m) return m[1].toLowerCase();
+      return v.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      error.textContent = '';
+      const slug = toSlug(input.value);
+      if (!slug) { error.textContent = 'Enter your venue link'; return; }
+      try {
+        const res = await fetch(`/api/venue/${encodeURIComponent(slug)}`);
+        if (res.status === 404) { error.textContent = `No venue found at /admin/${slug}. Check the spelling.`; return; }
+        if (!res.ok) throw new Error();
+        try { localStorage.setItem('qp_last_venue', slug); } catch {}
+        location.href = `/admin/${slug}`;
+      } catch {
+        error.textContent = 'Something went wrong. Please try again.';
+      }
+    });
+  </script>
+</body>
+</html>
