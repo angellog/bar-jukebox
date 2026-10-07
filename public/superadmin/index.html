@@ -79,6 +79,11 @@
     <!-- Venue Manager Table -->
     <div class="qp-card">
       <h2 class="qp-h3">Platform Venues</h2>
+      <p class="qp-text-secondary qp-text-sm" style="margin:.5rem 0 1rem">
+        Onboarding: while the Spotify app is in Development Mode, add each venue's <strong>Spotify account</strong> email under
+        <a href="https://developer.spotify.com/dashboard" target="_blank" style="text-decoration:underline">Spotify dashboard → your app → User Management</a>
+        (max 5) before they press Connect Spotify. ✅ = connected.
+      </p>
       <div style="overflow-x: auto">
         <table class="super-table" id="venuesTable">
           <thead>
@@ -87,6 +92,7 @@
               <th>Slug / URL</th>
               <th>Type</th>
               <th>Email</th>
+              <th>Spotify account</th>
               <th>Current Plan</th>
               <th>Guest Sessions</th>
               <th>Songs Played</th>
@@ -180,7 +186,8 @@
           <td style="font-weight:600">${escapeHTML(v.name)}</td>
           <td><a href="/v/${v.slug}" target="_blank" style="text-decoration:underline; font-family:monospace">/v/${v.slug}</a></td>
           <td>${v.type}</td>
-          <td>${v.email || '-'}</td>
+          <td>${escapeHTML(v.email || '-')}</td>
+          <td title="Add under User Management in the Spotify developer dashboard">${v.spotify_email ? escapeHTML(v.spotify_email) : '-'}${v.spotify_connected ? ' ✅' : ''}</td>
           <td>
             <select class="qp-select plan-change-select" data-id="${v.id}" style="padding:.25rem .5rem; font-size:.8rem; border-radius:4px; height:auto; width:auto">
               <option value="free" ${v.plan_id === 'free' ? 'selected' : ''}>Free</option>

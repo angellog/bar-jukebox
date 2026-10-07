@@ -9,6 +9,10 @@ White-label, multi-venue music queue for bars, cafes and lounges. Guests scan a 
 | Page | URL | Who |
 |---|---|---|
 | Landing / pricing / sign-up | `/`, `/pricing`, `/register` | Venue owners |
+| Setup guide | `/guide` | New venues and staff (step-by-step + troubleshooting) |
+| Venue log in | `/login` | Staff: type the venue name, go to its dashboard |
+| Hotels proposal | `/hotels` | Hotel prospects (proposal only; build plan in `docs/hotel-mode-proposal.md`) |
+| Changelog | `/changelog` | Public release history (update it with each release) |
 | Guest jukebox | `/v/:slug` | Guests (via QR code) |
 | Admin dashboard | `/admin/:slug` | Venue staff: queue, branding, limits, QR, Spotify connect |
 | Player | `/player/:slug` | The device plugged into the speakers (Spotify Premium) |
@@ -46,7 +50,7 @@ Workflow: build on a feature branch → test on staging → merge to `main` → 
 
 The GitHub push webhook isn't firing (Oct 2026). Until Railway's GitHub app is granted access to this repo, trigger deploys from the Railway dashboard or by reconnecting the service source.
 
-Required variables: `DATABASE_URL` (reference `${{Postgres.DATABASE_URL}}`), `BASE_URL`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SUPER_ADMIN_KEY`, `SALT`. Health check: `GET /api/health`.
+Required variables: `DATABASE_URL` (reference `${{Postgres.DATABASE_URL}}`), `BASE_URL`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SUPER_ADMIN_KEY`, `SALT`. Optional: `SUPPORT_EMAIL` (shown in the guide for activation and help). Health check: `GET /api/health`.
 
 **Spotify Development Mode (since Mar 2026):** client-credentials tokens can no longer search, so guest search runs on the venue's connected Spotify account. A venue must connect Spotify before guests can search. The app owner's account needs Premium, and only 5 Spotify users can connect until Spotify grants extended quota.
 
@@ -59,6 +63,12 @@ DATABASE_URL=... npm run test:engine                         # playback engine s
 npm run smoke -- http://localhost:3000                       # read-only checks
 SUPER_ADMIN_KEY=... npm run smoke -- <url>                    # also registers, exercises, then deletes a test venue
 ```
+
+## Onboarding a venue (Development Mode)
+
+1. The venue signs up at `/register` and enters its **Spotify account email**.
+2. You add that email in the Spotify developer dashboard → app → **User Management** (max 5). The super-admin venue list shows each venue's Spotify email and ✅ once connected.
+3. The venue follows the dashboard checklist / `/guide`: Connect Spotify → choose speaker → background music → QR code → test.
 
 ## Limits (who can use it)
 

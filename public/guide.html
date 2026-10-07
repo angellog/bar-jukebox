@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Step-by-step guide to setting up QueuePlay at your venue: Spotify, speaker, background music, QR codes and daily use.">
+  <title>Venue Setup Guide · QueuePlay</title>
+  <link rel="stylesheet" href="/assets/design-system.css">
+  <style>
+    .nav{display:flex;justify-content:space-between;align-items:center;padding:1.25rem 0;position:relative;z-index:10}
+    .nav-brand{display:flex;align-items:center;gap:.6rem;font-size:1.3rem;font-weight:700}
+    .nav-brand-icon{width:34px;height:34px;border-radius:var(--qp-radius-sm);background:linear-gradient(135deg,var(--qp-primary),var(--qp-secondary));display:flex;align-items:center;justify-content:center;font-size:1rem}
+    .nav-links{display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;justify-content:flex-end}
+    .nav-links a{font-size:.9rem;color:var(--qp-text-secondary)}
+
+    .guide{display:grid;grid-template-columns:220px 1fr;gap:2.5rem;padding:2rem 0 5rem;position:relative;z-index:1}
+    .toc{position:sticky;top:1.5rem;align-self:start;font-size:.88rem}
+    .toc a{display:block;padding:.35rem .6rem;border-radius:var(--qp-radius-sm);color:var(--qp-text-secondary)}
+    .toc a:hover{background:var(--qp-glass);color:var(--qp-text)}
+    .toc .toc-title{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--qp-text-muted);margin:.75rem .6rem .35rem;font-weight:600}
+
+    .intro{margin-bottom:2.5rem}
+    .intro p{color:var(--qp-text-secondary);font-size:1.05rem;max-width:640px;margin-top:.75rem}
+    .time-badge{display:inline-block;margin-top:1rem;padding:.3rem .8rem;border-radius:999px;font-size:.8rem;background:var(--qp-glass);border:1px solid var(--qp-glass-border)}
+
+    .step{scroll-margin-top:1.5rem;padding:1.5rem;margin-bottom:1.25rem;border-radius:var(--qp-radius-lg);background:var(--qp-bg-card);border:1px solid var(--qp-glass-border)}
+    .step-head{display:flex;align-items:center;gap:.85rem;margin-bottom:.85rem}
+    .step-num{width:36px;height:36px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;background:linear-gradient(135deg,var(--qp-primary),var(--qp-secondary))}
+    .step h2{font-size:1.2rem;font-weight:700}
+    .step p,.step li{font-size:.93rem;color:var(--qp-text-secondary);line-height:1.65}
+    .step ol,.step ul{padding-left:1.25rem;margin:.5rem 0}
+    .step li{margin-bottom:.3rem}
+    .step strong{color:var(--qp-text)}
+    .where{font-size:.78rem;color:var(--qp-text-muted);margin-top:.75rem}
+    .where code{font-size:.78rem}
+
+    .tip,.warn{padding:.85rem 1rem;border-radius:var(--qp-radius-md);font-size:.88rem;line-height:1.55;margin-top:.85rem}
+    .tip{background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.3)}
+    .warn{background:rgba(250,204,21,.08);border:1px solid rgba(250,204,21,.35)}
+
+    .options{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.85rem;margin-top:.75rem}
+    .option{padding:1rem;border-radius:var(--qp-radius-md);border:1px solid var(--qp-glass-border);background:var(--qp-glass)}
+    .option h3{font-size:.98rem;font-weight:600;margin-bottom:.35rem}
+
+    .checklist li{list-style:none;margin-left:-1.25rem}
+    .checklist li::before{content:'☐ ';color:var(--qp-primary-light)}
+
+    .trouble details{border-bottom:1px solid var(--qp-glass-border);padding:.8rem 0}
+    .trouble summary{cursor:pointer;font-weight:600;font-size:.95rem;color:var(--qp-text)}
+    .trouble details p{margin-top:.5rem}
+
+    footer{padding:2.5rem 0;text-align:center;color:var(--qp-text-muted);font-size:.85rem;border-top:1px solid var(--qp-glass-border)}
+
+    @media(max-width:760px){.nav-optional{display:none}}
+    @media(max-width:860px){
+      .guide{grid-template-columns:1fr}
+      .toc{position:static;display:flex;flex-wrap:wrap;gap:.25rem}
+      .toc .toc-title{width:100%}
+    }
+    @media print{
+      .nav,.toc,footer{display:none}
+      .guide{grid-template-columns:1fr}
+      body{background:#fff;color:#000}
+      .step{break-inside:avoid;border-color:#ccc}
+    }
+  </style>
+</head>
+<body>
+  <div class="qp-container">
+    <nav class="nav">
+      <a href="/" class="nav-brand"><span class="nav-brand-icon">Q</span><span>QueuePlay</span></a>
+      <div class="nav-links">
+        <a href="/guide" style="color:var(--qp-text);font-weight:600">Guide</a>
+        <a href="/hotels">Hotels</a>
+        <a href="/changelog" class="nav-optional">Changelog</a>
+        <a href="/pricing" class="nav-optional">Pricing</a>
+        <a href="/login">Log in</a>
+      </div>
+    </nav>
+
+    <div class="guide">
+      <aside class="toc" aria-label="Guide sections">
+        <div class="toc-title">Setup</div>
+        <a href="#before">0 · Before you start</a>
+        <a href="#create">1 · Create your venue</a>
+        <a href="#spotify">2 · Connect Spotify</a>
+        <a href="#speaker">3 · Choose your speaker</a>
+        <a href="#background">4 · Background music</a>
+        <a href="#rules">5 · Guest rules</a>
+        <a href="#brand">6 · Your brand</a>
+        <a href="#qr">7 · QR codes</a>
+        <a href="#test">8 · Test run</a>
+        <div class="toc-title">Running it</div>
+        <a href="#daily">Every day</a>
+        <a href="#trouble">Troubleshooting</a>
+      </aside>
+
+      <main>
+        <section class="intro">
+          <h1 class="qp-h2">Venue setup guide</h1>
+          <p>From sign-up to your first guest request. Follow the steps in order; each one says exactly where to click in your dashboard.</p>
+          <span class="time-badge">⏱ About 10 minutes</span>
+        </section>
+
+        <section class="step" id="before">
+          <div class="step-head"><div class="step-num">0</div><h2>Before you start</h2></div>
+          <ul>
+            <li><strong>A Spotify Premium account for the venue.</strong> Use one account just for the venue. If staff play music on it elsewhere (say, on their personal phone), Spotify moves the venue's music there.</li>
+            <li><strong>A device connected to your speakers:</strong> an old phone or tablet with the Spotify app, a Spotify Connect speaker (Sonos, Echo, Google Nest), a smart TV or Chromecast, or a laptop.</li>
+            <li><strong>Wi-Fi</strong> for that device. Guests can use Wi-Fi or mobile data.</li>
+          </ul>
+          <div class="warn" id="activationNote">
+            <strong>Early access:</strong> before you connect Spotify, your venue's Spotify account must be activated by the QueuePlay team. Enter its email when you sign up<span id="supportLine">, or send it to the QueuePlay team</span>. Activation is usually same-day.
+          </div>
+        </section>
+
+        <section class="step" id="create">
+          <div class="step-head"><div class="step-num">1</div><h2>Create your venue</h2></div>
+          <ol>
+            <li>Go to <a href="/register" style="text-decoration:underline">Create a venue</a>.</li>
+            <li>Enter the venue name, choose the type (it sets suggested background genres), and add the <strong>Spotify account email</strong>.</li>
+            <li>Choose an <strong>admin password</strong>. Staff use it to log in to the dashboard and the player.</li>
+            <li>Click <strong>Set up my venue</strong>. You land in your dashboard with a setup checklist on the Overview tab.</li>
+          </ol>
+          <div class="tip">Your links are always under <strong>Settings → Your Venue Links</strong>. To get back to the dashboard later, use <a href="/login" style="text-decoration:underline">Log in</a> and type your venue link.</div>
+        </section>
+
+        <section class="step" id="spotify">
+          <div class="step-head"><div class="step-num">2</div><h2>Connect Spotify</h2></div>
+          <ol>
+            <li>In the dashboard, open <strong>Music &amp; Speaker</strong>.</li>
+            <li>Under <strong>1 · Spotify account</strong>, click <strong>Connect Spotify Account</strong>.</li>
+            <li>Log in with the venue's Premium account and click <strong>Agree</strong>. You return to the dashboard with ✅ Spotify connected.</li>
+          </ol>
+          <div class="where">Dashboard → Music &amp; Speaker → 1 · Spotify account</div>
+        </section>
+
+        <section class="step" id="speaker">
+          <div class="step-head"><div class="step-num">3</div><h2>Choose where music plays</h2></div>
+          <p>Pick one. You can switch any time.</p>
+          <div class="options">
+            <div class="option">
+              <h3>📱 Spotify speaker or app (no screen)</h3>
+              <ol>
+                <li>Plug a phone or tablet into your sound system (or use a Spotify Connect speaker / smart TV).</li>
+                <li>Open Spotify on it, logged in to the venue account, and play any song for a second so Spotify sees it.</li>
+                <li>In <strong>2 · Where music plays</strong>, choose <strong>Spotify speaker or app</strong>, press <strong>↻ Refresh</strong>, select the device, then <strong>Save speaker</strong>.</li>
+              </ol>
+            </div>
+            <div class="option">
+              <h3>💻 This browser (Player page)</h3>
+              <ol>
+                <li>On a laptop or tablet connected to the speakers, open the <strong>Player</strong> (sidebar link "Open Player").</li>
+                <li>Enter the admin password if asked, then tap <strong>Start Player</strong>.</li>
+                <li>Keep that tab open. It shows Now Playing and Up next, which is handy on a screen behind the bar.</li>
+              </ol>
+            </div>
+          </div>
+          <div class="tip">Phone as speaker? Turn on <strong>Do Not Disturb</strong> and keep it charging so notifications and battery saver don't interrupt the music.</div>
+        </section>
+
+        <section class="step" id="background">
+          <div class="step-head"><div class="step-num">4</div><h2>Background music for quiet moments</h2></div>
+          <p>When nobody has requested a song, QueuePlay keeps playing. Guest requests always play next, as soon as the current track ends.</p>
+          <ol>
+            <li>In <strong>3 · Background music</strong>, tick <strong>Play background music when the request queue is empty</strong>.</li>
+            <li>Choose <strong>Genre mix</strong> and pick up to 8 genres (suggestions are pre-selected for your venue type), <em>or</em> choose <strong>A Spotify playlist</strong> and pick one of yours or paste any playlist link.</li>
+            <li>Click <strong>Save background music</strong>.</li>
+          </ol>
+          <div class="tip">Want a polished sound? A playlist you've curated sounds more consistent than a genre mix.</div>
+        </section>
+
+        <section class="step" id="rules">
+          <div class="step-head"><div class="step-num">5</div><h2>Set guest rules</h2></div>
+          <p>Open <strong>Settings → Guest Rate Limits</strong>. Each guest's phone is limited separately.</p>
+          <ul>
+            <li><strong>Cooldown between songs:</strong> minutes a guest waits before their next request. 0 = no cooldown.</li>
+            <li><strong>Songs per guest per day.</strong></li>
+            <li><strong>Max songs in queue:</strong> new requests are refused when it's full.</li>
+          </ul>
+          <p>Presets: <strong>Party</strong> (no limits), <strong>Balanced</strong> (5 min, 10/day, 25 in queue), <strong>Strict</strong> (15 min, 3/day, 15 in queue). Under <strong>Playback</strong> you can also block explicit songs.</p>
+          <div class="tip">Testing with your own phone? Use <strong>↺ Reset all guests' limits now</strong> so the cooldown doesn't slow you down.</div>
+        </section>
+
+        <section class="step" id="brand">
+          <div class="step-head"><div class="step-num">6</div><h2>Make it yours</h2></div>
+          <p>In <strong>Brand Identity</strong>, add your logo link, colours, font and a welcome message. Guests see them on your page, and the QR code uses your main colour.</p>
+        </section>
+
+        <section class="step" id="qr">
+          <div class="step-head"><div class="step-num">7</div><h2>Print and place your QR code</h2></div>
+          <ol>
+            <li>Open <strong>Branded QR Code</strong> and click <strong>💾 Download Image</strong> (or <strong>📋 Copy Link</strong> to share the guest link on WhatsApp or Instagram).</li>
+            <li>Print it with a short line like <em>"Pick the next song: scan me"</em>.</li>
+            <li>Place it where people sit and wait: table tents, the bar counter, menus, the entrance.</li>
+          </ol>
+          <div class="tip">Print at least 4 cm wide so phones can scan it from a seat. Test one print before printing all of them.</div>
+        </section>
+
+        <section class="step" id="test">
+          <div class="step-head"><div class="step-num">8</div><h2>Test run (2 minutes)</h2></div>
+          <ul class="checklist">
+            <li>Music &amp; Speaker → <strong>Start music</strong>. Background music plays (if switched on).</li>
+            <li>Scan the QR code with your phone, search a song, tap <strong>Add</strong>.</li>
+            <li>Add a second song from another phone.</li>
+            <li>Your songs play in order after the current track, without the current one being cut off.</li>
+            <li>Try <strong>Skip</strong> and <strong>Pause / Resume</strong> from the dashboard.</li>
+          </ul>
+          <p>All good? You're live. 🎉</p>
+        </section>
+
+        <section class="step" id="daily">
+          <div class="step-head"><div class="step-num">✓</div><h2>Every day</h2></div>
+          <ul>
+            <li><strong>Opening:</strong> turn on the speaker device, open Spotify on it (or the Player page), then <strong>Start music</strong> in the dashboard.</li>
+            <li><strong>During service:</strong> remove unwanted requests in <strong>Queue &amp; Controls</strong>; skip or pause from <strong>Music &amp; Speaker</strong>.</li>
+            <li><strong>Closing:</strong> press <strong>Stop</strong>, and <strong>Clear Queue</strong> (Queue &amp; Controls) if you want a fresh start tomorrow.</li>
+          </ul>
+        </section>
+
+        <section class="step trouble" id="trouble">
+          <div class="step-head"><div class="step-num">?</div><h2>Troubleshooting</h2></div>
+          <details>
+            <summary>"Spotify not connected" or guests see "This venue hasn't connected Spotify yet"</summary>
+            <p>Go to Music &amp; Speaker → Connect Spotify Account and log in with the venue's Premium account. If Spotify shows an error, the account may not be activated yet. See "Early access" in step 0.</p>
+          </details>
+          <details>
+            <summary>"Speaker not found" / my device isn't in the list</summary>
+            <p>Open Spotify on the device, make sure it's logged in to the venue account, play any song for a second, then press ↻ Refresh. Spotify only lists devices that are switched on with Spotify open.</p>
+          </details>
+          <details>
+            <summary>Music suddenly moved to someone's phone</summary>
+            <p>Someone played music with the venue's Spotify account on another device. Spotify plays on one device per account. Keep the venue account for the venue only, then press Start music again.</p>
+          </details>
+          <details>
+            <summary>"The player was opened in another tab or device"</summary>
+            <p>Only one Player page can run per venue. The newest one takes over. Close the extra tabs and tap Start Player on the one connected to the speakers.</p>
+          </details>
+          <details>
+            <summary>A guest says "Please wait X minutes"</summary>
+            <p>That's the cooldown from Settings → Guest Rate Limits. Lower it, set it to 0, or press Reset all guests' limits.</p>
+          </details>
+          <details>
+            <summary>"Spotify refused playback"</summary>
+            <p>The account needs Spotify Premium, and some devices (like certain smart TVs or cars) don't allow remote control. Try a phone with the Spotify app or the Player page.</p>
+          </details>
+          <details>
+            <summary>I forgot my dashboard link</summary>
+            <p>Use <a href="/login" style="text-decoration:underline">Log in</a> and type your venue name. Your link is the venue name in lowercase with dashes, e.g. "Cloud Nine Lounge" → cloud-nine-lounge.</p>
+          </details>
+          <p class="qp-mt-md" id="helpLine">Still stuck? Contact the QueuePlay team.</p>
+        </section>
+      </main>
+    </div>
+
+    <footer>
+      <p>QueuePlay &mdash; Guest-powered music for modern venues.</p>
+      <p class="qp-mt-sm"><a href="/">Home</a> &middot; <a href="/hotels">Hotels</a> &middot; <a href="/changelog">Changelog</a> &middot; <a href="/pricing">Pricing</a> &middot; <a href="/login">Venue log in</a> &middot; <a href="/register">Create a venue</a></p>
+    </footer>
+  </div>
+
+  <script>
+    // Show the support email if the platform has one configured.
+    fetch('/api/public-config').then(r => r.json()).then(cfg => {
+      if (!cfg.supportEmail) return;
+      const mail = cfg.supportEmail.replace(/[<>"]/g, '');
+      document.getElementById('supportLine').innerHTML = `, or email it to <a href="mailto:${mail}" style="text-decoration:underline">${mail}</a>`;
+      document.getElementById('helpLine').innerHTML = `Still stuck? Email <a href="mailto:${mail}" style="text-decoration:underline">${mail}</a> with your venue link and what you see on screen.`;
+    }).catch(() => {});
+  </script>
+</body>
+</html>
