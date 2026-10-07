@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="QueuePlay for Hotels: a proposal. Guests choose the music in your lobby, pool bar, rooftop and restaurant from their phone or room TV.">
+  <title>Hotels Proposal · QueuePlay</title>
+  <link rel="stylesheet" href="/assets/design-system.css">
+  <style>
+    .nav{display:flex;justify-content:space-between;align-items:center;padding:1.25rem 0;position:relative;z-index:10;gap:1rem}
+    .nav-brand{display:flex;align-items:center;gap:.6rem;font-size:1.3rem;font-weight:700}
+    .nav-brand-icon{width:34px;height:34px;border-radius:var(--qp-radius-sm);background:linear-gradient(135deg,var(--qp-primary),var(--qp-secondary));display:flex;align-items:center;justify-content:center;font-size:1rem}
+    .nav-links{display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;justify-content:flex-end}
+    .nav-links a{font-size:.9rem;color:var(--qp-text-secondary)}
+    .nav-links a.active{color:var(--qp-text);font-weight:600}
+
+    .doc{max-width:860px;margin:0 auto;padding:2rem 0 5rem;position:relative;z-index:1}
+    .badge{display:inline-block;padding:.35rem .9rem;font-size:.78rem;font-weight:600;border-radius:999px;background:rgba(250,204,21,.1);border:1px solid rgba(250,204,21,.35);color:#fde68a;margin-bottom:1.25rem}
+    .lead{font-size:1.1rem;color:var(--qp-text-secondary);line-height:1.65;margin-top:1rem;max-width:700px}
+    .meta{display:flex;gap:1.5rem;flex-wrap:wrap;margin-top:1.25rem;font-size:.85rem;color:var(--qp-text-muted)}
+
+    section.block{margin-top:2.75rem}
+    section.block h2{font-size:1.35rem;font-weight:700;margin-bottom:.85rem}
+    section.block h3{font-size:1rem;font-weight:600;margin-bottom:.35rem;color:var(--qp-text)}
+    section.block p,section.block li{font-size:.94rem;color:var(--qp-text-secondary);line-height:1.65}
+    section.block ul,section.block ol{padding-left:1.25rem}
+    section.block li{margin-bottom:.35rem}
+    section.block strong{color:var(--qp-text)}
+
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:.9rem;margin-top:1rem}
+    .card{padding:1.15rem;border-radius:var(--qp-radius-lg);background:var(--qp-bg-card);border:1px solid var(--qp-glass-border)}
+    .card .icon{font-size:1.5rem;margin-bottom:.4rem}
+
+    .journey{counter-reset:j;display:grid;gap:.75rem;margin-top:1rem}
+    .journey .card{display:flex;gap:.9rem;align-items:flex-start}
+    .journey .card::before{counter-increment:j;content:counter(j);flex-shrink:0;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;background:linear-gradient(135deg,var(--qp-primary),var(--qp-secondary))}
+
+    table{width:100%;border-collapse:collapse;margin-top:.75rem;font-size:.9rem}
+    th,td{text-align:left;padding:.65rem .75rem;border-bottom:1px solid var(--qp-glass-border);vertical-align:top}
+    th{color:var(--qp-text);font-weight:600;font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+    td{color:var(--qp-text-secondary)}
+    .table-wrap{overflow-x:auto}
+
+    .note{padding:1rem 1.1rem;border-radius:var(--qp-radius-md);font-size:.9rem;line-height:1.6;margin-top:1rem;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);color:var(--qp-text-secondary)}
+    .cta{margin-top:3rem;padding:2rem;border-radius:var(--qp-radius-xl);background:var(--qp-bg-card);border:1px solid var(--qp-glass-border);text-align:center}
+    .cta p{color:var(--qp-text-secondary);margin:.6rem auto 1.25rem;max-width:560px}
+
+    .faq details{border-bottom:1px solid var(--qp-glass-border);padding:.8rem 0}
+    .faq summary{cursor:pointer;font-weight:600;font-size:.95rem;color:var(--qp-text)}
+    .faq details p{margin-top:.5rem}
+
+    footer{padding:2.5rem 0;text-align:center;color:var(--qp-text-muted);font-size:.85rem;border-top:1px solid var(--qp-glass-border)}
+    @media(max-width:760px){.nav-optional{display:none}}
+    @media print{.nav,footer,.cta .qp-btn{display:none}body{background:#fff;color:#000}.card{border-color:#ccc}}
+  </style>
+</head>
+<body>
+  <div class="qp-container">
+    <nav class="nav">
+      <a href="/" class="nav-brand"><span class="nav-brand-icon">Q</span><span>QueuePlay</span></a>
+      <div class="nav-links">
+        <a href="/guide">Guide</a>
+        <a href="/hotels" class="active">Hotels</a>
+        <a href="/changelog" class="nav-optional">Changelog</a>
+        <a href="/pricing" class="nav-optional">Pricing</a>
+        <a href="/login">Log in</a>
+      </div>
+    </nav>
+
+    <article class="doc">
+      <span class="badge">Proposal · Hotel edition available on request</span>
+      <h1 class="qp-h2">QueuePlay for Hotels</h1>
+      <p class="lead">Let your guests choose the music in your lobby, pool bar, rooftop and restaurant, from their phone or their room TV. Each space keeps its own vibe and rules, and your team stays in control from one dashboard.</p>
+      <div class="meta"><span>📄 Proposal v1 · October 2026</span><span>⏱ About 4 weeks from sign-off to all spaces live</span></div>
+
+      <section class="block">
+        <h2>What your guests get</h2>
+        <div class="grid">
+          <div class="card"><div class="icon">📱</div><h3>Pick a song from anywhere</h3><p>From the sunbed, the bar or their room: scan a QR code, choose which space to send the song to, search and add it.</p></div>
+          <div class="card"><div class="icon">📺</div><h3>Room TV friendly</h3><p>A QR code on the TV welcome screen, plus a TV-friendly page they can use with the remote where the TV allows it.</p></div>
+          <div class="card"><div class="icon">🎶</div><h3>Fair and in order</h3><p>Requests play in the order received, never cutting off the current song. Limits per room keep it fair.</p></div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>What your hotel gets</h2>
+        <div class="grid">
+          <div class="card"><div class="icon">🗺️</div><h3>One login, every space</h3><p>Each space (Lobby, Pool Bar, Rooftop, Restaurant) is a <strong>zone</strong> with its own queue, speaker, rules and background music, all managed from one hotel dashboard.</p></div>
+          <div class="card"><div class="icon">🕰️</div><h3>Opening hours &amp; quiet hours</h3><p>Requests are only accepted while a zone is open. Set quiet hours and explicit-content filters per zone.</p></div>
+          <div class="card"><div class="icon">✅</div><h3>Optional staff approval</h3><p>For formal spaces, requests can wait for a staff tap before joining the queue.</p></div>
+          <div class="card"><div class="icon">🌊</div><h3>Never silent</h3><p>Background music per zone (a genre mix or your playlist) fills the gaps. Guest requests play next.</p></div>
+          <div class="card"><div class="icon">🎨</div><h3>Your brand</h3><p>Your logo, colours and welcome message on every guest page and QR code.</p></div>
+          <div class="card"><div class="icon">📊</div><h3>Insight</h3><p>What guests request per zone and when, to tune each space's music.</p></div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>The guest journey</h2>
+        <div class="journey">
+          <div class="card"><div><h3>Discover</h3><p>A QR code on the room TV welcome screen, an in-room card, the key-card sleeve, and table cards in each space.</p></div></div>
+          <div class="card"><div><h3>Choose a space</h3><p>The hotel page lists open zones, e.g. <em>Pool Bar · open until 22:00</em>, <em>Rooftop · from 17:00</em>. Closed zones show their hours.</p></div></div>
+          <div class="card"><div><h3>Request</h3><p>Search, tap <strong>Add</strong>, and optionally enter a room number so staff can say "this one's for room 214". No app, no account.</p></div></div>
+          <div class="card"><div><h3>Enjoy</h3><p>The guest sees their place in the queue. The song plays in that space when its turn comes.</p></div></div>
+        </div>
+        <div class="note"><strong>Music inside the rooms stays private.</strong> QueuePlay plays in shared spaces. It doesn't push music into guest rooms. Guests who want their own music in the room can use their TV's casting feature as usual.</div>
+      </section>
+
+      <section class="block">
+        <h2>What we need from the hotel</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Item</th><th>Details</th></tr></thead>
+            <tbody>
+              <tr><td><strong>List of zones</strong></td><td>Name, opening hours and preferred style for each space (e.g. Pool Bar: afrobeats &amp; amapiano, 10:00–22:00).</td></tr>
+              <tr><td><strong>A player device per zone</strong></td><td>A tablet or phone with the music app, or a compatible connected speaker, wired to that zone's sound system. We can advise on suitable devices.</td></tr>
+              <tr><td><strong>Internet for each device</strong></td><td>Wi-Fi or a wired connection. Works on isolated guest networks (see IT notes).</td></tr>
+              <tr><td><strong>Music service &amp; licence</strong></td><td>A business music account per zone and a public-performance licence from UPRS. See "Music licensing".</td></tr>
+              <tr><td><strong>Room TV access</strong></td><td>Ability to add a QR code or link to the TV welcome screen / IPTV portal, via your TV provider.</td></tr>
+              <tr><td><strong>Brand assets</strong></td><td>Logo (SVG or PNG), brand colours, welcome text.</td></tr>
+              <tr><td><strong>Contacts</strong></td><td>One manager per zone for rules and training, and one IT contact.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Notes for the IT team</h2>
+        <ul>
+          <li><strong>Nothing to install on your servers.</strong> QueuePlay is cloud-hosted; guest pages and the dashboard run in the browser over HTTPS.</li>
+          <li><strong>Works with isolated guest networks.</strong> Phones and players never talk to each other directly. Everything goes through the cloud, so client isolation and VLANs are fine.</li>
+          <li><strong>Outbound HTTPS only</strong> is needed from player devices (to QueuePlay and the music service).</li>
+          <li><strong>Room TVs:</strong> hospitality TV platforms (e.g. LG Pro:Centric, Samsung LYNK) often restrict browsing, so a QR code on the welcome screen is the most reliable entry point. Where the TV browser is open, the TV-friendly page works with the remote.</li>
+          <li><strong>Guest data:</strong> no account or login. We store the song, the zone and, only if the guest enters it, a room number, kept for 30 days for statistics. No names, phone numbers or payment details.</li>
+        </ul>
+      </section>
+
+      <section class="block">
+        <h2>Music licensing</h2>
+        <p>Playing music in a hotel's public spaces requires:</p>
+        <ol>
+          <li><strong>A business music service.</strong> Consumer streaming accounts (personal Spotify, Apple Music, YouTube) are licensed for personal use only and can't be used for public playback. We'll agree a business-licensed music source with you as part of the proposal.</li>
+          <li><strong>A public-performance licence</strong> from the Uganda Performing Right Society (UPRS) for each property. Many hotels already hold one.</li>
+        </ol>
+        <p>We'll confirm both before going live.</p>
+      </section>
+
+      <section class="block">
+        <h2>Rollout plan</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>When</th><th>Step</th><th>Outcome</th></tr></thead>
+            <tbody>
+              <tr><td>Week 1</td><td>Discovery &amp; site survey</td><td>Zones, hours, sound systems and TV platform confirmed; music source agreed</td></tr>
+              <tr><td>Weeks 2–3</td><td>Set-up &amp; branding</td><td>Hotel dashboard, zones, players and QR materials ready; staff trained</td></tr>
+              <tr><td>Week 4</td><td>Pilot in one zone</td><td>Live with guests (usually the pool bar or rooftop); feedback gathered</td></tr>
+              <tr><td>After pilot</td><td>All zones live</td><td>TV welcome-screen QR switched on; monthly review of requests and settings</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="qp-mt-sm" style="font-size:.85rem">Timings are estimates and depend on your TV provider and music licensing.</p>
+      </section>
+
+      <section class="block">
+        <h2>Pricing</h2>
+        <p>Priced <strong>per zone, per month</strong> and quoted per property, based on the number of zones and the music source. Pilot terms are agreed before the pilot starts. Multi-property groups receive a group quote.</p>
+      </section>
+
+      <section class="block faq">
+        <h2>Questions</h2>
+        <details><summary>Can guests request songs from their room for the pool or rooftop?</summary><p>Yes. That's the idea: they choose the zone, and the song plays there when its turn comes. Zones that are closed don't accept requests.</p></details>
+        <details><summary>Can a guest flood the queue?</summary><p>No. Limits are per room or phone: a cooldown between requests, a daily maximum and a maximum queue length per zone, plus optional staff approval.</p></details>
+        <details><summary>What if the internet drops?</summary><p>The current song finishes and background music resumes when the connection returns. Staff are shown the zone's status in the dashboard.</p></details>
+        <details><summary>Do we need new speakers?</summary><p>Usually not. A tablet or phone connects to your existing sound system in each zone.</p></details>
+        <details><summary>Can it work across several of our properties?</summary><p>Yes. Each property has its own zones under one group account.</p></details>
+      </section>
+
+      <div class="cta">
+        <h2 class="qp-h3">Interested for your hotel?</h2>
+        <p>Tell us your zones, your TV system and how music runs today, and we'll send a tailored proposal and arrange a demo on site.</p>
+        <a class="qp-btn qp-btn-primary" id="contactBtn" href="mailto:?subject=QueuePlay%20for%20Hotels">Contact us</a>
+        <p class="qp-text-muted qp-text-xs qp-mt-md" id="contactLine"></p>
+      </div>
+    </article>
+
+    <footer>
+      <p>QueuePlay &mdash; Guest-powered music for modern venues.</p>
+      <p class="qp-mt-sm"><a href="/">Home</a> &middot; <a href="/guide">Guide</a> &middot; <a href="/hotels">Hotels</a> &middot; <a href="/changelog">Changelog</a> &middot; <a href="/pricing">Pricing</a></p>
+    </footer>
+  </div>
+
+  <script>
+    fetch('/api/public-config').then(r => r.json()).then(cfg => {
+      if (!cfg.supportEmail) return;
+      const mail = cfg.supportEmail.replace(/[<>"]/g, '');
+      document.getElementById('contactBtn').href = `mailto:${mail}?subject=${encodeURIComponent('QueuePlay for Hotels')}`;
+      document.getElementById('contactLine').textContent = mail;
+    }).catch(() => {});
+  </script>
+</body>
+</html>

@@ -320,6 +320,14 @@ app.get('/guide', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'guide.html'));
 });
 
+app.get('/hotels', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'hotels.html'));
+});
+
+app.get('/changelog', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'changelog.html'));
+});
+
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'login.html'));
 });

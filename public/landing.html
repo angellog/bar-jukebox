@@ -140,13 +140,14 @@
       background:linear-gradient(135deg,var(--qp-primary),var(--qp-secondary));
       display:flex;align-items:center;justify-content:center;font-size:1rem;
     }
-    .nav-links{display:flex;align-items:center;gap:1.5rem}
+    .nav-links{display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;justify-content:flex-end}
     .nav-links a{font-size:.9rem;color:var(--qp-text-secondary);transition:color var(--qp-transition)}
     .nav-links a:hover{color:var(--qp-text)}
 
     /* FOOTER */
     footer{padding:3rem 0;text-align:center;color:var(--qp-text-muted);font-size:.85rem;border-top:1px solid var(--qp-glass-border)}
 
+    @media(max-width:760px){.nav-optional{display:none}}
     @media(max-width:640px){
       .hero{padding:3.5rem 0 2.5rem}
       .nav-links{gap:1rem}
@@ -164,7 +165,9 @@
       </a>
       <div class="nav-links">
         <a href="/guide">Guide</a>
-        <a href="/pricing">Pricing</a>
+        <a href="/hotels">Hotels</a>
+        <a href="/changelog" class="nav-optional">Changelog</a>
+        <a href="/pricing" class="nav-optional">Pricing</a>
         <a href="/login">Log in</a>
         <a href="/register" class="qp-btn qp-btn-primary qp-btn-sm">Get Started</a>
       </div>
@@ -373,7 +376,7 @@
     <!-- FOOTER -->
     <footer>
       <p>QueuePlay &mdash; Guest-powered music for modern venues.</p>
-      <p class="qp-mt-sm"><a href="/guide">Setup guide</a> &middot; <a href="/pricing">Pricing</a> &middot; <a href="/login">Venue log in</a> &middot; <a href="/register">Create a venue</a></p>
+      <p class="qp-mt-sm"><a href="/guide">Setup guide</a> &middot; <a href="/hotels">Hotels</a> &middot; <a href="/changelog">Changelog</a> &middot; <a href="/pricing">Pricing</a> &middot; <a href="/login">Venue log in</a> &middot; <a href="/register">Create a venue</a></p>
     </footer>
   </div>
 </body>

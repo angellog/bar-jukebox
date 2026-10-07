@@ -11,6 +11,8 @@ White-label, multi-venue music queue for bars, cafes and lounges. Guests scan a 
 | Landing / pricing / sign-up | `/`, `/pricing`, `/register` | Venue owners |
 | Setup guide | `/guide` | New venues and staff (step-by-step + troubleshooting) |
 | Venue log in | `/login` | Staff: type the venue name, go to its dashboard |
+| Hotels proposal | `/hotels` | Hotel prospects (proposal only; build plan in `docs/hotel-mode-proposal.md`) |
+| Changelog | `/changelog` | Public release history (update it with each release) |
 | Guest jukebox | `/v/:slug` | Guests (via QR code) |
 | Admin dashboard | `/admin/:slug` | Venue staff: queue, branding, limits, QR, Spotify connect |
 | Player | `/player/:slug` | The device plugged into the speakers (Spotify Premium) |

@@ -10,7 +10,7 @@
     .nav{display:flex;justify-content:space-between;align-items:center;padding:1.25rem 0;position:relative;z-index:10}
     .nav-brand{display:flex;align-items:center;gap:.6rem;font-size:1.3rem;font-weight:700}
     .nav-brand-icon{width:34px;height:34px;border-radius:var(--qp-radius-sm);background:linear-gradient(135deg,var(--qp-primary),var(--qp-secondary));display:flex;align-items:center;justify-content:center;font-size:1rem}
-    .nav-links{display:flex;align-items:center;gap:1.25rem}
+    .nav-links{display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;justify-content:flex-end}
     .nav-links a{font-size:.9rem;color:var(--qp-text-secondary)}
 
     .guide{display:grid;grid-template-columns:220px 1fr;gap:2.5rem;padding:2rem 0 5rem;position:relative;z-index:1}
@@ -51,6 +51,7 @@
 
     footer{padding:2.5rem 0;text-align:center;color:var(--qp-text-muted);font-size:.85rem;border-top:1px solid var(--qp-glass-border)}
 
+    @media(max-width:760px){.nav-optional{display:none}}
     @media(max-width:860px){
       .guide{grid-template-columns:1fr}
       .toc{position:static;display:flex;flex-wrap:wrap;gap:.25rem}
@@ -69,9 +70,11 @@
     <nav class="nav">
       <a href="/" class="nav-brand"><span class="nav-brand-icon">Q</span><span>QueuePlay</span></a>
       <div class="nav-links">
-        <a href="/pricing">Pricing</a>
+        <a href="/guide" style="color:var(--qp-text);font-weight:600">Guide</a>
+        <a href="/hotels">Hotels</a>
+        <a href="/changelog" class="nav-optional">Changelog</a>
+        <a href="/pricing" class="nav-optional">Pricing</a>
         <a href="/login">Log in</a>
-        <a href="/register" class="qp-btn qp-btn-primary qp-btn-sm">Get Started</a>
       </div>
     </nav>
 
@@ -252,7 +255,7 @@
 
     <footer>
       <p>QueuePlay &mdash; Guest-powered music for modern venues.</p>
-      <p class="qp-mt-sm"><a href="/">Home</a> &middot; <a href="/pricing">Pricing</a> &middot; <a href="/login">Venue log in</a> &middot; <a href="/register">Create a venue</a></p>
+      <p class="qp-mt-sm"><a href="/">Home</a> &middot; <a href="/hotels">Hotels</a> &middot; <a href="/changelog">Changelog</a> &middot; <a href="/pricing">Pricing</a> &middot; <a href="/login">Venue log in</a> &middot; <a href="/register">Create a venue</a></p>
     </footer>
   </div>
 

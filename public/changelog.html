@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="What's new in QueuePlay: release history.">
+  <title>Changelog · QueuePlay</title>
+  <link rel="stylesheet" href="/assets/design-system.css">
+  <style>
+    .nav{display:flex;justify-content:space-between;align-items:center;padding:1.25rem 0;position:relative;z-index:10;gap:1rem}
+    .nav-brand{display:flex;align-items:center;gap:.6rem;font-size:1.3rem;font-weight:700}
+    .nav-brand-icon{width:34px;height:34px;border-radius:var(--qp-radius-sm);background:linear-gradient(135deg,var(--qp-primary),var(--qp-secondary));display:flex;align-items:center;justify-content:center;font-size:1rem}
+    .nav-links{display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;justify-content:flex-end}
+    .nav-links a{font-size:.9rem;color:var(--qp-text-secondary)}
+    .nav-links a.active{color:var(--qp-text);font-weight:600}
+
+    .doc{max-width:760px;margin:0 auto;padding:2rem 0 5rem;position:relative;z-index:1}
+    .doc > p{color:var(--qp-text-secondary);margin-top:.5rem}
+    .release{position:relative;padding:0 0 2.25rem 1.75rem;border-left:2px solid var(--qp-glass-border);margin-left:.5rem}
+    .release:first-of-type{margin-top:2rem}
+    .release::before{content:'';position:absolute;left:-8px;top:.35rem;width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,var(--qp-primary),var(--qp-secondary))}
+    .release-head{display:flex;align-items:baseline;gap:.75rem;flex-wrap:wrap}
+    .release h2{font-size:1.15rem;font-weight:700}
+    .release time{font-size:.82rem;color:var(--qp-text-muted)}
+    .tag{font-size:.7rem;font-weight:600;padding:.15rem .55rem;border-radius:999px;border:1px solid var(--qp-glass-border);color:var(--qp-text-secondary)}
+    .tag.new{background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.35);color:#86efac}
+    .tag.fix{background:rgba(250,204,21,.08);border-color:rgba(250,204,21,.3);color:#fde68a}
+    .release ul{padding-left:1.1rem;margin-top:.6rem}
+    .release li{font-size:.92rem;color:var(--qp-text-secondary);line-height:1.6;margin-bottom:.3rem}
+    .release strong{color:var(--qp-text)}
+    footer{padding:2.5rem 0;text-align:center;color:var(--qp-text-muted);font-size:.85rem;border-top:1px solid var(--qp-glass-border)}
+    @media(max-width:760px){.nav-optional{display:none}}
+  </style>
+</head>
+<body>
+  <div class="qp-container">
+    <nav class="nav">
+      <a href="/" class="nav-brand"><span class="nav-brand-icon">Q</span><span>QueuePlay</span></a>
+      <div class="nav-links">
+        <a href="/guide">Guide</a>
+        <a href="/hotels">Hotels</a>
+        <a href="/changelog" class="active nav-optional">Changelog</a>
+        <a href="/pricing" class="nav-optional">Pricing</a>
+        <a href="/login">Log in</a>
+      </div>
+    </nav>
+
+    <article class="doc">
+      <h1 class="qp-h2">Changelog</h1>
+      <p>What's new in QueuePlay.</p>
+
+      <section class="release">
+        <div class="release-head"><h2>1.2 · Onboarding</h2><time datetime="2026-10-07">7 October 2026</time><span class="tag new">New</span></div>
+        <ul>
+          <li><strong>Setup guide</strong>: step-by-step from sign-up to your first guest request, with troubleshooting.</li>
+          <li><strong>Welcome walkthrough</strong> for new venues and a <strong>setup checklist</strong> on the dashboard that ticks itself off as you go.</li>
+          <li><strong>Venue log in</strong>: type your venue name to reach your dashboard.</li>
+          <li>Sign-up asks for the venue's Spotify account so it can be activated faster.</li>
+          <li>Refreshed website, plus a <a href="/hotels" style="text-decoration:underline">proposal for hotels</a>.</li>
+        </ul>
+      </section>
+
+      <section class="release">
+        <div class="release-head"><h2>1.1.1</h2><time datetime="2026-10-02">2 October 2026</time><span class="tag fix">Fix</span></div>
+        <ul>
+          <li>Fixed a rare case where the next song could be queued twice.</li>
+        </ul>
+      </section>
+
+      <section class="release">
+        <div class="release-head"><h2>1.1 · Speaker mode &amp; background music</h2><time datetime="2026-10-02">2 October 2026</time><span class="tag new">New</span></div>
+        <ul>
+          <li><strong>No screen needed</strong>: play through a phone or tablet with Spotify, a Spotify Connect speaker or a smart TV, controlled from the dashboard.</li>
+          <li><strong>Background music</strong> when nobody is requesting: a genre mix suited to your venue, or a Spotify playlist. Guest requests always play next.</li>
+          <li><strong>Up next</strong> list on the Player page.</li>
+          <li>Smoother transitions: the next song is lined up before the current one ends.</li>
+        </ul>
+      </section>
+
+      <section class="release">
+        <div class="release-head"><h2>1.0 · First full release</h2><time datetime="2026-10-02">2 October 2026</time><span class="tag new">New</span></div>
+        <ul>
+          <li>Requests play <strong>in the order they're added</strong>, and adding a song never interrupts the current one.</li>
+          <li>Editable <strong>guest rate limits</strong> with presets, including "no cooldown".</li>
+          <li><strong>Your venue links</strong> always available in Settings.</li>
+          <li>Simple password log in for staff (no keys to copy).</li>
+          <li>One player per venue, so music no longer stops and starts when two players are open.</li>
+        </ul>
+      </section>
+
+      <section class="release">
+        <div class="release-head"><h2>Early access</h2><time datetime="2026-06-15">June 2026</time></div>
+        <ul>
+          <li>Guest QR requests, white-label branding, Spotify connection, admin dashboard.</li>
+        </ul>
+      </section>
+    </article>
+
+    <footer>
+      <p>QueuePlay &mdash; Guest-powered music for modern venues.</p>
+      <p class="qp-mt-sm"><a href="/">Home</a> &middot; <a href="/guide">Guide</a> &middot; <a href="/hotels">Hotels</a> &middot; <a href="/pricing">Pricing</a></p>
+    </footer>
+  </div>
+</body>
+</html>
