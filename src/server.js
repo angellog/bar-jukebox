@@ -718,6 +718,36 @@ app.get('/api/venue/:venueSlug/qr', resolveVenue, async (req, res) => {
   }
 });
 
+// Print-quality QR (SVG). Brand colours too light to scan reliably fall back to near-black.
+function scannableColor(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+  if (!m) return '#111111';
+  const n = parseInt(m[1], 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.25 ? '#111111' : `#${m[1]}`;
+}
+
+app.get('/api/venue/:venueSlug/qr.svg', resolveVenue, async (req, res) => {
+  try {
+    const svg = await QRCode.toString(`${BASE_URL}/v/${req.venue.slug}`, {
+      type: 'svg', margin: 1, errorCorrectionLevel: 'M',
+      color: { dark: scannableColor(req.venue.brand_primary), light: '#ffffff' }
+    });
+    res.type('image/svg+xml').set('Cache-Control', 'public, max-age=300').send(svg);
+  } catch (error) {
+    res.status(500).send('QR failed');
+  }
+});
+
+// Printable table cards / poster for a venue (public: it only shows the public guest link).
+app.get('/v/:venueSlug/print', resolveVenue, (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'print.html'));
+});
+
 app.get('/api/venue/:venueSlug/admin/full', resolveVenue, venueAdminAuth, async (req, res) => {
   const v = req.venue;
   const { spotify_access_token, spotify_refresh_token, admin_password_hash, ...safe } = v;

@@ -169,6 +169,11 @@ async function main() {
     const afterLogout = await stranger(`/api/venue/${slug}/admin/stats`);
     check('logout ends session', afterLogout.status === 401);
 
+    // ---- Printable QR ----
+    const svg = await anon(`/api/venue/${slug}/qr.svg`);
+    check('print-quality QR (SVG)', svg.status === 200 && (svg.headers.get('content-type') || '').includes('svg') && svg.text.startsWith('<svg'));
+    check('printable table cards page', (await anon(`/v/${slug}/print`)).status === 200);
+
     // ---- Backups ----
     const exp = await anon('/api/superadmin/export', { headers: { 'x-super-key': SUPER_KEY } });
     const expVenue = exp.json?.tables?.venues?.find(v => v.slug === slug);
