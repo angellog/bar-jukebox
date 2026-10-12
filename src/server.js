@@ -83,6 +83,14 @@ app.use(express.json());
 app.use(cookieParser());
 app.use('/assets', express.static(path.join(__dirname, '..', 'public', 'assets')));
 
+// Railway's edge sets X-Real-IP to the visitor's address; req.ip there is a proxy hop
+// that changes between requests. Only trust the header when running on Railway.
+const BEHIND_RAILWAY = !!process.env.RAILWAY_ENVIRONMENT;
+function clientIp(req) {
+  const real = BEHIND_RAILWAY && req.headers['x-real-ip'];
+  return (typeof real === 'string' && real.trim()) || req.ip || req.socket?.remoteAddress || '0.0.0.0';
+}
+
 function guestIdentity(req, res, next) {
   let guestId = req.cookies.qp_guest;
   if (!guestId) {
@@ -90,7 +98,7 @@ function guestIdentity(req, res, next) {
     res.cookie('qp_guest', guestId, { maxAge: 365 * 24 * 60 * 60 * 1000, httpOnly: true, sameSite: 'lax' });
   }
   req.guestId = guestId;
-  req.guestIp = req.ip || req.connection?.remoteAddress || '0.0.0.0';
+  req.guestIp = clientIp(req);
   next();
 }
 
@@ -187,7 +195,7 @@ function venueAdminAuth(req, res, next) {
 }
 
 function superAdminAuth(req, res, next) {
-  const limitKey = `super|${req.ip}`;
+  const limitKey = `super|${clientIp(req)}`;
   const wait = loginBlocked(limitKey, 20);
   if (wait) return res.status(429).json({ error: `Too many attempts. Try again in ${wait} minute(s).` });
   const key = String(req.headers['x-super-key'] || '');
@@ -599,7 +607,7 @@ app.get('/api/venue/:venueSlug/rate-limit', resolveVenue, async (req, res) => {
 app.post('/api/venue/:venueSlug/admin/login', resolveVenue, async (req, res) => {
   const { password } = req.body;
   if (!password) return res.status(400).json({ error: 'Password required' });
-  const limitKey = `venue|${req.ip}|${req.venue.id}`;
+  const limitKey = `venue|${clientIp(req)}|${req.venue.id}`;
   const wait = loginBlocked(limitKey, 10);
   if (wait) return res.status(429).json({ error: `Too many wrong passwords. Try again in ${wait} minute(s).` });
   if (!verifyPassword(password, req.venue.admin_password_hash)) {
