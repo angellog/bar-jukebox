@@ -57,6 +57,15 @@
     .welcome-steps li { list-style: none; counter-increment: w; display: flex; gap: .75rem; margin-bottom: .7rem; font-size: .9rem; color: var(--qp-text-secondary); line-height: 1.5; }
     .welcome-steps li::before { content: counter(w); flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .8rem; color: #fff; background: linear-gradient(135deg,var(--qp-primary),var(--qp-secondary)); }
     .welcome-steps strong { color: var(--qp-text); }
+    .period-btn { padding: .4rem .9rem; border-radius: 999px; border: 1px solid var(--qp-glass-border); background: var(--qp-glass); color: var(--qp-text-secondary); cursor: pointer; font: inherit; font-size: .85rem; }
+    .period-btn.on { background: var(--qp-primary); border-color: var(--qp-primary); color: #fff; }
+    .bill-plan { padding: 1.1rem; border-radius: var(--qp-radius-lg); border: 1px solid var(--qp-glass-border); background: var(--qp-bg-card); display: flex; flex-direction: column; gap: .5rem; }
+    .bill-plan.current { border-color: var(--qp-primary); }
+    .bill-plan ul { padding-left: 1.1rem; margin: 0; }
+    .bill-plan li { font-size: .82rem; color: var(--qp-text-secondary); margin-bottom: .2rem; }
+    .bill-price { font-size: 1.35rem; font-weight: 700; }
+    .bill-table { width: 100%; border-collapse: collapse; font-size: .83rem; }
+    .bill-table td, .bill-table th { padding: .45rem .5rem; border-bottom: 1px solid var(--qp-glass-border); text-align: left; }
     .mode-option {
       display: flex; gap: .75rem; align-items: flex-start; cursor: pointer;
       padding: .75rem; border-radius: var(--qp-radius-md); border: 1px solid var(--qp-glass-border); margin-bottom: .5rem;
@@ -148,6 +157,7 @@
         <div class="admin-nav-item" data-target="config">⚙️ Settings</div>
         <div class="admin-nav-item" data-target="spotify">🔊 Music & Speaker</div>
         <div class="admin-nav-item" data-target="qr">📱 Branded QR Code</div>
+        <div class="admin-nav-item" data-target="billing">💳 Plan &amp; Billing</div>
         <a href="/guide" target="_blank" class="admin-nav-item" style="display:block; text-decoration:none">📘 Setup Guide</a>
         <a id="playerPageLink" href="#" target="_blank" class="admin-nav-item" style="display:block; text-decoration:none; border: 1.5px dashed var(--qp-primary); color:var(--qp-primary-light)">▶️ Open Player</a>
       </aside>
@@ -157,6 +167,7 @@
         <!-- OVERVIEW -->
         <section class="admin-panel active" id="panel-overview">
           <h2 class="qp-h3 qp-mb-lg">Active Performance</h2>
+          <div id="planBanner" class="qp-hidden qp-mb-lg" style="padding:.9rem 1rem; border-radius:var(--qp-radius-md); font-size:.9rem"></div>
 
           <div id="setupChecklist" class="qp-card qp-mb-lg" style="padding:1.1rem">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:.6rem">
@@ -456,6 +467,40 @@
           </div>
         </section>
 
+        <!-- PLAN & BILLING -->
+        <section class="admin-panel" id="panel-billing">
+          <h2 class="qp-h3 qp-mb-lg">Plan &amp; Billing</h2>
+
+          <div class="qp-card qp-mb-lg" style="padding:1.25rem">
+            <div class="qp-text-xs qp-text-muted">Current plan</div>
+            <div style="display:flex; align-items:baseline; gap:.75rem; flex-wrap:wrap">
+              <div id="billingPlanName" style="font-size:1.4rem; font-weight:700">…</div>
+              <div id="billingPlanStatus" class="qp-text-sm qp-text-secondary"></div>
+            </div>
+          </div>
+
+          <div id="billingDisabled" class="qp-card qp-mb-lg qp-hidden" style="padding:1.1rem"></div>
+
+          <div id="billingBuy">
+            <div style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem">
+              <span class="qp-text-sm qp-text-secondary">Pay for</span>
+              <div id="periodPicker" style="display:flex; gap:.4rem; flex-wrap:wrap"></div>
+            </div>
+            <div id="billingPlans" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:.85rem"></div>
+
+            <div class="qp-card qp-mt-lg" style="padding:1.1rem">
+              <label class="qp-label" for="billingEmail">Email for the receipt</label>
+              <input type="email" id="billingEmail" class="qp-input" placeholder="you@venue.com" style="max-width:360px">
+              <p class="qp-text-xs qp-text-muted qp-mt-xs">Payments are handled securely by Flutterwave: MTN or Airtel Mobile Money, or card. Plans are prepaid and don't renew automatically; we'll remind you before yours ends.</p>
+            </div>
+          </div>
+
+          <div class="qp-card qp-mt-lg" style="padding:1.1rem">
+            <h3 style="font-weight:600; font-size:1rem; margin-bottom:.6rem">Payment history</h3>
+            <div id="billingHistory" class="qp-text-sm qp-text-muted">No payments yet.</div>
+          </div>
+        </section>
+
         <!-- QR CODE -->
         <section class="admin-panel" id="panel-qr">
           <h2 class="qp-h3 qp-mb-sm">Printable QR Entry</h2>
@@ -745,6 +790,119 @@
     document.getElementById('welcomeLaterBtn').addEventListener('click', closeWelcome);
     document.getElementById('welcomeModal').addEventListener('click', (e) => { if (e.target.id === 'welcomeModal') closeWelcome(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeWelcome(); });
+
+    // ---------- Plan & Billing ----------
+    let billingState = null;
+    let selectedMonths = 1;
+    const fmtUGX = n => `UGX ${Number(n).toLocaleString('en-US')}`;
+    const fmtDate = d => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+
+    function renderPlanBanner() {
+      const banner = document.getElementById('planBanner');
+      const cur = billingState && billingState.current;
+      if (!cur) return;
+      let html = '';
+      if (cur.status === 'expired' && cur.planId === 'free') {
+        html = '⚠️ Your paid plan has ended and you\'re on Free. <a href="#" data-open="billing" style="text-decoration:underline">Renew</a>';
+      } else if (cur.planId !== 'free' && cur.expiresAt) {
+        const days = Math.ceil((new Date(cur.expiresAt) - Date.now()) / 86400000);
+        if (days <= 7) html = `⏳ Your plan ends in ${Math.max(days, 0)} day${days === 1 ? '' : 's'} (${fmtDate(cur.expiresAt)}). <a href="#" data-open="billing" style="text-decoration:underline">Renew now</a>`;
+      }
+      banner.classList.toggle('qp-hidden', !html);
+      if (html) {
+        banner.innerHTML = html;
+        banner.style.background = 'rgba(250,204,21,.08)';
+        banner.style.border = '1px solid rgba(250,204,21,.35)';
+        banner.querySelector('[data-open]').onclick = (e) => { e.preventDefault(); openPanel('billing'); };
+      }
+    }
+
+    function renderBilling() {
+      const b = billingState;
+      const curPlan = b.plans.find(p => p.id === b.current.planId) || { name: b.current.planId };
+      document.getElementById('billingPlanName').textContent = curPlan.name;
+      document.getElementById('billingPlanStatus').textContent = b.current.planId === 'free'
+        ? (b.current.status === 'expired' ? 'Your paid plan ended' : 'Free plan')
+        : (b.current.expiresAt ? `Paid until ${fmtDate(b.current.expiresAt)}` : 'Active (no expiry)');
+
+      const disabled = document.getElementById('billingDisabled');
+      disabled.classList.toggle('qp-hidden', b.enabled);
+      if (!b.enabled) {
+        const mail = b.contactEmail ? ` at <a href="mailto:${b.contactEmail}?subject=${encodeURIComponent('Upgrade ' + (venue?.name || ''))}" style="text-decoration:underline">${b.contactEmail}</a>` : '';
+        disabled.innerHTML = `<strong>Online payment is coming soon.</strong><p class="qp-text-sm qp-text-secondary qp-mt-xs">To upgrade now, contact us${mail} and we'll set up your plan.</p>`;
+      }
+
+      document.getElementById('periodPicker').innerHTML = b.periods.map(p =>
+        `<button type="button" class="period-btn${p.months === selectedMonths ? ' on' : ''}" data-months="${p.months}">${p.months} month${p.months === 1 ? '' : 's'}${p.charged < p.months ? ` · pay ${p.charged}` : ''}</button>`).join('');
+      document.querySelectorAll('.period-btn').forEach(btn => btn.onclick = () => { selectedMonths = Number(btn.dataset.months); renderBilling(); });
+
+      const charged = (b.periods.find(p => p.months === selectedMonths) || { charged: selectedMonths }).charged;
+      document.getElementById('billingPlans').innerHTML = b.plans.filter(p => p.id !== 'free').map(p => {
+        const isCurrent = p.id === b.current.planId;
+        return `
+          <div class="bill-plan${isCurrent ? ' current' : ''}">
+            <div style="display:flex; justify-content:space-between; align-items:center"><strong>${escapeHTML(p.name)}</strong>${isCurrent ? '<span class="qp-text-xs" style="color:var(--qp-primary-light)">Current</span>' : ''}</div>
+            <div class="bill-price">${fmtUGX(p.monthly * charged)}</div>
+            <div class="qp-text-xs qp-text-muted">${selectedMonths} month${selectedMonths === 1 ? '' : 's'} · ${fmtUGX(p.monthly)}/month</div>
+            <ul>${(p.features || []).map(f => `<li>${escapeHTML(f)}</li>`).join('')}</ul>
+            <button type="button" class="qp-btn ${isCurrent ? 'qp-btn-primary' : 'qp-btn-secondary'} qp-btn-sm" data-pay="${p.id}" ${b.enabled ? '' : 'disabled'}>${isCurrent ? 'Renew' : 'Choose'} ${escapeHTML(p.name)}</button>
+          </div>`;
+      }).join('');
+      document.querySelectorAll('[data-pay]').forEach(btn => btn.onclick = () => startCheckout(btn.dataset.pay, btn));
+
+      const emailInput = document.getElementById('billingEmail');
+      if (!emailInput.value && venue?.email) emailInput.value = venue.email;
+
+      document.getElementById('billingHistory').innerHTML = b.payments.length ? `
+        <table class="bill-table"><thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Method</th><th>Status</th></tr></thead><tbody>
+        ${b.payments.map(p => `<tr><td>${fmtDate(p.paidAt || p.createdAt)}</td><td>${escapeHTML(p.planId)} · ${p.months} mo</td><td>${fmtUGX(p.amount)}</td><td>${escapeHTML(p.method || '-')}</td><td>${{ successful: '✅ Paid', pending: '⏳ Pending', failed: '✖ Not completed' }[p.status] || escapeHTML(p.status)}</td></tr>`).join('')}
+        </tbody></table>` : 'No payments yet.';
+      renderPlanBanner();
+    }
+
+    async function loadBilling() {
+      try {
+        const res = await fetch(`/api/venue/${slug}/admin/billing`);
+        if (!res.ok) return;
+        billingState = await res.json();
+        renderBilling();
+      } catch {}
+    }
+
+    async function startCheckout(planId, btn) {
+      const email = document.getElementById('billingEmail').value.trim();
+      if (!email) { showToast('Enter an email for the receipt', 'error'); document.getElementById('billingEmail').focus(); return; }
+      btn.disabled = true;
+      const label = btn.textContent;
+      btn.textContent = 'Opening Flutterwave…';
+      try {
+        const res = await fetch(`/api/venue/${slug}/admin/billing/checkout`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ planId, months: selectedMonths, email })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        location.href = data.link;
+      } catch (err) {
+        showToast(err.message, 'error');
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+    }
+
+    function showBillingOutcome() {
+      const outcome = new URLSearchParams(location.search).get('billing');
+      if (!outcome) return;
+      const msg = {
+        success: ['Payment received. Your plan is active. Thank you! 🎉', 'success'],
+        pending: ['Payment received by Flutterwave and being confirmed. Refresh in a minute.', 'info'],
+        cancelled: ['Payment cancelled. Nothing was charged.', 'info'],
+        failed: ['The payment did not go through. Please try again.', 'error']
+      }[outcome];
+      if (msg) showToast(msg[0], msg[1]);
+      history.replaceState(null, '', location.pathname);
+      if (outcome !== 'cancelled') openPanel('billing');
+    }
 
     // ---------- Music & Speaker ----------
     let musicState = null;
@@ -1069,6 +1227,11 @@
         document.getElementById('configRateLimit').value = venue.rate_limit_minutes ?? 5;
         document.getElementById('configSongsPerGuest').value = venue.songs_per_guest || 10;
         document.getElementById('configMaxQueue').value = venue.max_queue_size || 20;
+        if (data.plan?.max_queue_size) {
+          const q = document.getElementById('configMaxQueue');
+          q.max = data.plan.max_queue_size;
+          q.nextElementSibling.textContent = `Your ${data.plan.name} plan allows up to ${data.plan.max_queue_size}`;
+        }
         const planMaxPerDay = data.plan?.max_songs_per_day;
         if (planMaxPerDay) {
           document.getElementById('configSongsPerGuest').max = planMaxPerDay;
@@ -1145,6 +1308,8 @@
       await loadQueue();
       await loadMusic();
       renderChecklist();
+      await loadBilling();
+      showBillingOutcome();
       maybeShowWelcome();
 
       // Refresh stats regularly

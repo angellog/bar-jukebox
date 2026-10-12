@@ -171,9 +171,28 @@ class QueuePlayDB {
 
       -- Onboarding (v1.2): Spotify account to allowlist while the app is in Development Mode
       ALTER TABLE venues ADD COLUMN IF NOT EXISTS spotify_email TEXT;
+
+      -- Billing (v1.4): prepaid plans via Flutterwave
+      ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS price_ugx_monthly INTEGER;
+      CREATE TABLE IF NOT EXISTS payments (
+        id SERIAL PRIMARY KEY,
+        venue_id TEXT NOT NULL,
+        tx_ref TEXT UNIQUE NOT NULL,
+        plan_id TEXT NOT NULL,
+        months INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+        currency TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        flw_transaction_id TEXT,
+        payment_type TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        paid_at TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_payments_venue ON payments(venue_id, created_at);
     `);
 
     await this.seedSubscriptionPlans();
+    await this.syncPlanCatalog();
     console.log('[DB] PostgreSQL schema initialized');
   }
 
@@ -206,6 +225,94 @@ class QueuePlayDB {
     } finally {
       client.release();
     }
+  }
+
+  // Keep plan prices and feature lists in step with src/billing.js on every boot.
+  async syncPlanCatalog() {
+    const { MONTHLY_PRICE, PLAN_FEATURES } = require('./billing');
+    for (const [id, features] of Object.entries(PLAN_FEATURES)) {
+      await this.pool.query(
+        'UPDATE subscription_plans SET features_json = $1, price_ugx_monthly = $2 WHERE id = $3',
+        [JSON.stringify(features), MONTHLY_PRICE[id] || 0, id]
+      );
+    }
+  }
+
+  // ---------- payments ----------
+
+  async createPayment(p) {
+    const { rows } = await this.pool.query(
+      `INSERT INTO payments (venue_id, tx_ref, plan_id, months, amount, currency)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [p.venueId, p.txRef, p.planId, p.months, p.amount, p.currency]
+    );
+    return rows[0];
+  }
+
+  async getPaymentByTxRef(txRef) {
+    const { rows } = await this.pool.query('SELECT * FROM payments WHERE tx_ref = $1', [txRef]);
+    return rows[0] || null;
+  }
+
+  async getPayments(venueId, limit = 20) {
+    const { rows } = await this.pool.query(
+      'SELECT * FROM payments WHERE venue_id = $1 ORDER BY created_at DESC LIMIT $2', [venueId, limit]
+    );
+    return rows;
+  }
+
+  async markPaymentFailed(txRef, transactionId) {
+    await this.pool.query(
+      "UPDATE payments SET status = 'failed', flw_transaction_id = COALESCE($2, flw_transaction_id) WHERE tx_ref = $1 AND status = 'pending'",
+      [txRef, transactionId || null]
+    );
+  }
+
+  // Marks a pending payment successful and extends the venue's plan, exactly once.
+  // Returns the updated venue row, or null if the payment was already applied.
+  async applySuccessfulPayment(txRef, transactionId, paymentType) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query(
+        "UPDATE payments SET status = 'successful', flw_transaction_id = $2, payment_type = $3, paid_at = CURRENT_TIMESTAMP WHERE tx_ref = $1 AND status <> 'successful' RETURNING *",
+        [txRef, String(transactionId), paymentType || null]
+      );
+      if (!rows[0]) { await client.query('ROLLBACK'); return null; }
+      const pay = rows[0];
+      // Same plan and still active: extend from the current expiry. Otherwise start now.
+      const { rows: vrows } = await client.query(
+        `UPDATE venues SET
+           subscription_expires_at = (CASE
+             WHEN plan_id = $2 AND subscription_expires_at > NOW() THEN subscription_expires_at
+             ELSE NOW() END) + ($3 || ' months')::interval,
+           subscription_started_at = CASE WHEN plan_id = $2 AND subscription_expires_at > NOW() THEN subscription_started_at ELSE NOW() END,
+           plan_id = $2,
+           subscription_status = 'active',
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1 RETURNING *`,
+        [pay.venue_id, pay.plan_id, String(pay.months)]
+      );
+      await client.query('COMMIT');
+      return vrows[0];
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Plans with an expiry date that has passed drop to Free. Plans set by the
+  // super admin without an expiry (comped) are left alone.
+  async expireLapsedPlans() {
+    const { rows } = await this.pool.query(
+      `UPDATE venues SET plan_id = 'free', subscription_status = 'expired', updated_at = CURRENT_TIMESTAMP
+       WHERE plan_id <> 'free' AND subscription_expires_at IS NOT NULL AND subscription_expires_at < NOW()
+       RETURNING id, slug`
+    );
+    if (rows.length) console.log(`[Billing] ${rows.length} plan(s) expired: ${rows.map(r => r.slug).join(', ')}`);
+    return rows;
   }
 
   async createVenue(data) {
@@ -325,7 +432,7 @@ class QueuePlayDB {
 
   async updateVenuePlan(venueId, planId) {
     await this.pool.query(
-      'UPDATE venues SET plan_id = $1, subscription_started_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      "UPDATE venues SET plan_id = $1, subscription_started_at = CURRENT_TIMESTAMP, subscription_expires_at = NULL, subscription_status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = $2",
       [planId, venueId]
     );
   }
@@ -378,8 +485,9 @@ class QueuePlayDB {
       [venueId]
     );
 
-    if (countRows[0].count >= (venue.max_queue_size || plan.max_queue_size)) {
-      throw new Error(`Queue is full (max ${venue.max_queue_size || plan.max_queue_size} songs)`);
+    const maxQueue = Math.min(venue.max_queue_size || plan.max_queue_size, plan.max_queue_size);
+    if (countRows[0].count >= maxQueue) {
+      throw new Error(`Queue is full (max ${maxQueue} songs)`);
     }
 
     const { rows: dupRows } = await this.pool.query(

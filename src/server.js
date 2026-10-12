@@ -13,6 +13,7 @@ const { version: APP_VERSION } = require('../package.json');
 const QueuePlayDB = require('./database');
 const SpotifyService = require('./spotify');
 const { PlaybackEngine, GENRES, VENUE_PRESETS, defaultGenres } = require('./engine');
+const billing = require('./billing');
 
 const app = express();
 const server = http.createServer(app);
@@ -678,7 +679,7 @@ app.put('/api/venue/:venueSlug/admin/config', resolveVenue, venueAdminAuth, asyn
     const config = {
       rate_limit_minutes: clampInt(b.rate_limit_minutes, 0, 120),
       songs_per_guest: clampInt(b.songs_per_guest, 1, plan.max_songs_per_day),
-      max_queue_size: clampInt(b.max_queue_size, 1, 200),
+      max_queue_size: clampInt(b.max_queue_size, 1, plan.max_queue_size),
       allow_explicit: b.allow_explicit === undefined ? undefined : (Number(b.allow_explicit) ? 1 : 0),
       auto_play: b.auto_play === undefined ? undefined : (Number(b.auto_play) ? 1 : 0)
     };
@@ -967,7 +968,108 @@ app.post('/api/register', async (req, res) => {
 
 app.get('/api/plans', async (req, res) => {
   const plans = await db.getAllPlans();
-  res.json({ plans });
+  res.json({ plans, currency: billing.CURRENCY, periods: Object.keys(billing.PERIODS).map(Number) });
+});
+
+// ============================================
+// BILLING (Flutterwave, prepaid)
+// ============================================
+
+// Verifies a transaction with Flutterwave and, if everything matches our
+// pending payment, activates the plan. Safe to call more than once.
+async function settlePayment(txRef, transactionId) {
+  const payment = await db.getPaymentByTxRef(txRef);
+  if (!payment) return { ok: false, reason: 'unknown_payment' };
+  if (payment.status === 'successful') return { ok: true, payment, already: true };
+  if (!transactionId) return { ok: false, reason: 'missing_transaction', payment };
+
+  const tx = await billing.verifyTransaction(transactionId);
+  const matches = tx && tx.status === 'successful' && tx.tx_ref === payment.tx_ref &&
+    tx.currency === payment.currency && Number(tx.amount) >= Number(payment.amount);
+  if (!matches) {
+    if (tx && ['failed', 'cancelled'].includes(tx.status)) await db.markPaymentFailed(txRef, transactionId);
+    console.warn('[Billing] Verification mismatch', { txRef, status: tx && tx.status, amount: tx && tx.amount, currency: tx && tx.currency });
+    return { ok: false, reason: 'not_verified', payment };
+  }
+  const venue = await db.applySuccessfulPayment(txRef, tx.id, tx.payment_type);
+  if (venue) console.log(`[Billing] ${venue.slug}: ${payment.plan_id} +${payment.months} month(s) via ${tx.payment_type}`);
+  return { ok: true, payment, venue };
+}
+
+app.get('/api/venue/:venueSlug/admin/billing', resolveVenue, venueAdminAuth, async (req, res) => {
+  const v = req.venue;
+  const [plans, payments] = await Promise.all([db.getAllPlans(), db.getPayments(v.id)]);
+  res.json({
+    enabled: billing.billingEnabled(),
+    currency: billing.CURRENCY,
+    periods: Object.entries(billing.PERIODS).map(([months, charged]) => ({ months: Number(months), charged })),
+    current: { planId: v.plan_id, status: v.subscription_status, expiresAt: v.subscription_expires_at },
+    plans: plans.map(p => ({ id: p.id, name: p.name, monthly: p.price_ugx_monthly, features: p.features })),
+    payments: payments.map(p => ({
+      txRef: p.tx_ref, planId: p.plan_id, months: p.months, amount: p.amount, currency: p.currency,
+      status: p.status, method: p.payment_type, createdAt: p.created_at, paidAt: p.paid_at
+    })),
+    contactEmail: process.env.SUPPORT_EMAIL || null
+  });
+});
+
+app.post('/api/venue/:venueSlug/admin/billing/checkout', resolveVenue, venueAdminAuth, async (req, res) => {
+  if (!billing.billingEnabled()) return res.status(503).json({ error: 'Online payments are not switched on yet. Please contact us to upgrade.' });
+  const planId = String(req.body.planId || '');
+  const months = parseInt(req.body.months, 10);
+  const amount = billing.priceFor(planId, months);
+  if (!amount) return res.status(400).json({ error: 'Choose a plan and period' });
+  const email = String(req.body.email || req.venue.email || '').trim();
+  if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: 'Enter an email for the receipt' });
+
+  const plan = await db.getPlan(planId);
+  const txRef = billing.newTxRef(req.venue.id);
+  await db.createPayment({ venueId: req.venue.id, txRef, planId, months, amount, currency: billing.CURRENCY });
+  try {
+    const link = await billing.createCheckout({
+      txRef, amount, venue: req.venue, planName: plan.name, months, customerEmail: email,
+      redirectUrl: `${BASE_URL}/billing/return`
+    });
+    if (!link) throw new Error('No checkout link returned');
+    res.json({ link });
+  } catch (error) {
+    console.error('[Billing Checkout Error]', error.message);
+    await db.markPaymentFailed(txRef);
+    res.status(502).json({ error: 'Could not start the payment. Please try again.' });
+  }
+});
+
+// Flutterwave sends the customer back here: ?status=...&tx_ref=...&transaction_id=...
+app.get('/billing/return', async (req, res) => {
+  const { tx_ref: txRef, transaction_id: transactionId, status } = req.query;
+  const payment = txRef ? await db.getPaymentByTxRef(String(txRef)) : null;
+  const venue = payment ? await db.getVenueById(payment.venue_id) : null;
+  if (!payment || !venue) return res.redirect('/login');
+  let outcome = 'failed';
+  try {
+    if (status === 'cancelled') {
+      await db.markPaymentFailed(payment.tx_ref, transactionId);
+      outcome = 'cancelled';
+    } else {
+      const result = await settlePayment(payment.tx_ref, transactionId);
+      outcome = result.ok ? 'success' : (result.reason === 'not_verified' ? 'pending' : 'failed');
+    }
+  } catch (error) {
+    console.error('[Billing Return Error]', error.message);
+    outcome = 'pending';
+  }
+  res.redirect(`/admin/${venue.slug}?billing=${outcome}`);
+});
+
+// Flutterwave webhook. Configure the URL and a secret hash in the Flutterwave dashboard.
+app.post('/api/webhooks/flutterwave', async (req, res) => {
+  if (!billing.webhookAuthentic(req.headers['verif-hash'])) return res.status(401).end();
+  const event = req.body || {};
+  const data = event.data || {};
+  res.status(200).json({ received: true }); // acknowledge quickly; verification happens below
+  if ((event.event === 'charge.completed' || event['event.type']) && data.tx_ref && data.id) {
+    settlePayment(String(data.tx_ref), data.id).catch(e => console.error('[Billing Webhook Error]', e.message));
+  }
 });
 
 app.get('/api/superadmin/stats', superAdminAuth, async (req, res) => {
@@ -1025,6 +1127,10 @@ async function start() {
     const purge = () => db.purgeOldGuestData(30).catch(e => console.error('[Retention Error]', e.message));
     purge();
     setInterval(purge, 24 * 60 * 60 * 1000).unref();
+    // Billing: lapse expired prepaid plans to Free (hourly).
+    const expire = () => db.expireLapsedPlans().catch(e => console.error('[Expiry Error]', e.message));
+    expire();
+    setInterval(expire, 60 * 60 * 1000).unref();
 
     server.listen(PORT, () => {
       console.log('');
