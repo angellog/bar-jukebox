@@ -200,6 +200,7 @@
           <td>${v.total_played}</td>
           <td style="font-size:.8rem; color:var(--qp-text-muted)">${new Date(v.created_at).toLocaleDateString()}</td>
           <td>
+            <button class="qp-btn qp-btn-secondary qp-btn-sm reset-pw-btn" data-id="${v.id}" data-name="${escapeHTML(v.name)}" style="padding:.25rem .5rem; font-size:.78rem">Reset password</button>
             <button class="qp-btn qp-btn-secondary qp-btn-sm delete-venue-btn" data-id="${v.id}" style="color:#f87171; padding:.25rem .5rem; font-size:.78rem">Delete</button>
           </td>
         </tr>
@@ -231,6 +232,23 @@
       });
 
       // Delete venue listener
+      document.querySelectorAll('.reset-pw-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!confirm(`Reset the admin password for "${btn.dataset.name}"? Their staff will be signed out everywhere.`)) return;
+          try {
+            const res = await fetch(`/api/superadmin/venues/${btn.dataset.id}/reset-password`, {
+              method: 'POST',
+              headers: { 'x-super-key': masterKey }
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Reset failed');
+            prompt(`Temporary password for ${btn.dataset.name}. It is shown only once: copy it and send it to the venue, and ask them to change it in Settings.\n\nDashboard: ${data.adminUrl}`, data.temporaryPassword);
+          } catch (err) {
+            alert(err.message);
+          }
+        });
+      });
+
       document.querySelectorAll('.delete-venue-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
           if (!confirm('Are you sure you want to permanently delete this venue and all associated databases/queues?')) return;

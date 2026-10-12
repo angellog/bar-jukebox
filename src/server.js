@@ -120,22 +120,29 @@ function sessionCookieName(slug) {
   return `qp_admin_${slug}`;
 }
 
-function signSession(venueId) {
+// Sessions are bound to the current password: changing or resetting it signs out every device.
+function passwordFingerprint(venue) {
+  return crypto.createHash('sha256').update(String(venue.admin_password_hash || '')).digest('hex').slice(0, 16);
+}
+
+function signSession(venue) {
   const exp = (Date.now() + SESSION_TTL_MS).toString(36);
-  const sig = crypto.createHmac('sha256', STATE_SECRET).update(`session.${venueId}.${exp}`).digest('hex');
+  const sig = crypto.createHmac('sha256', STATE_SECRET)
+    .update(`session.${venue.id}.${exp}.${passwordFingerprint(venue)}`).digest('hex');
   return `${exp}.${sig}`;
 }
 
-function verifySession(token, venueId) {
+function verifySession(token, venue) {
   const [exp, sig] = (token || '').split('.');
   if (!exp || !sig) return false;
-  const expected = crypto.createHmac('sha256', STATE_SECRET).update(`session.${venueId}.${exp}`).digest('hex');
+  const expected = crypto.createHmac('sha256', STATE_SECRET)
+    .update(`session.${venue.id}.${exp}.${passwordFingerprint(venue)}`).digest('hex');
   if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return false;
   return Date.now() < parseInt(exp, 36);
 }
 
 function setAdminSession(res, venue) {
-  res.cookie(sessionCookieName(venue.slug), signSession(venue.id), {
+  res.cookie(sessionCookieName(venue.slug), signSession(venue), {
     maxAge: SESSION_TTL_MS,
     httpOnly: true,
     sameSite: 'lax',
@@ -144,11 +151,33 @@ function setAdminSession(res, venue) {
   });
 }
 
+// ---- Brute-force protection: count failed logins per IP (+ venue) in a sliding window ----
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const loginFailures = new Map(); // key -> { count, first }
+
+function loginBlocked(key, limit) {
+  const entry = loginFailures.get(key);
+  if (!entry) return 0;
+  if (Date.now() - entry.first > LOGIN_WINDOW_MS) { loginFailures.delete(key); return 0; }
+  return entry.count >= limit ? Math.ceil((entry.first + LOGIN_WINDOW_MS - Date.now()) / 60000) : 0;
+}
+
+function recordLoginFailure(key) {
+  const entry = loginFailures.get(key);
+  if (!entry || Date.now() - entry.first > LOGIN_WINDOW_MS) loginFailures.set(key, { count: 1, first: Date.now() });
+  else entry.count++;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of loginFailures) if (now - entry.first > LOGIN_WINDOW_MS) loginFailures.delete(key);
+}, 5 * 60 * 1000).unref();
+
 function isVenueAdmin(req) {
   if (!req.venue) return false;
   const headerKey = req.headers['x-admin-key'];
   if (headerKey && headerKey === req.venue.admin_key) return true;
-  return verifySession(req.cookies[sessionCookieName(req.venue.slug)], req.venue.id);
+  return verifySession(req.cookies[sessionCookieName(req.venue.slug)], req.venue);
 }
 
 function venueAdminAuth(req, res, next) {
@@ -158,8 +187,16 @@ function venueAdminAuth(req, res, next) {
 }
 
 function superAdminAuth(req, res, next) {
-  const key = req.headers['x-super-key'];
-  if (key !== process.env.SUPER_ADMIN_KEY) return res.status(401).json({ error: 'Unauthorized' });
+  const limitKey = `super|${req.ip}`;
+  const wait = loginBlocked(limitKey, 20);
+  if (wait) return res.status(429).json({ error: `Too many attempts. Try again in ${wait} minute(s).` });
+  const key = String(req.headers['x-super-key'] || '');
+  const expected = String(process.env.SUPER_ADMIN_KEY || '');
+  const ok = expected && key.length === expected.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(expected));
+  if (!ok) {
+    recordLoginFailure(limitKey);
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
   next();
 }
 
@@ -261,7 +298,7 @@ wss.on('connection', async (ws, req) => {
   // account, and two of them fight over playback (music stops and starts).
   if (url.searchParams.get('role') === 'player') {
     const cookies = parseCookies(req.headers.cookie);
-    if (!verifySession(cookies[sessionCookieName(venue.slug)], venue.id)) {
+    if (!verifySession(cookies[sessionCookieName(venue.slug)], venue)) {
       ws.close(4001, 'Unauthorized');
       return;
     }
@@ -322,6 +359,14 @@ app.get('/guide', (req, res) => {
 
 app.get('/hotels', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'hotels.html'));
+});
+
+app.get('/privacy', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'privacy.html'));
+});
+
+app.get('/terms', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'terms.html'));
 });
 
 app.get('/changelog', (req, res) => {
@@ -551,14 +596,26 @@ app.get('/api/venue/:venueSlug/rate-limit', resolveVenue, async (req, res) => {
   }
 });
 
-app.post('/api/venue/:venueSlug/admin/login', resolveVenue, (req, res) => {
+app.post('/api/venue/:venueSlug/admin/login', resolveVenue, async (req, res) => {
   const { password } = req.body;
   if (!password) return res.status(400).json({ error: 'Password required' });
+  const limitKey = `venue|${req.ip}|${req.venue.id}`;
+  const wait = loginBlocked(limitKey, 10);
+  if (wait) return res.status(429).json({ error: `Too many wrong passwords. Try again in ${wait} minute(s).` });
   if (!verifyPassword(password, req.venue.admin_password_hash)) {
+    recordLoginFailure(limitKey);
     return res.status(401).json({ error: 'Invalid password' });
   }
+  loginFailures.delete(limitKey);
   if (!req.venue.admin_password_hash.startsWith('scrypt$')) {
-    db.updateVenuePasswordHash(req.venue.id, hashPassword(password)).catch(e => console.error('[Rehash Error]', e.message));
+    // Upgrade first so the session is bound to the new hash.
+    const upgraded = hashPassword(password);
+    try {
+      await db.updateVenuePasswordHash(req.venue.id, upgraded);
+      req.venue.admin_password_hash = upgraded;
+    } catch (e) {
+      console.error('[Rehash Error]', e.message);
+    }
   }
   setAdminSession(res, req.venue);
   res.json({ success: true, venue: { id: req.venue.id, slug: req.venue.slug, name: req.venue.name } });
@@ -566,6 +623,20 @@ app.post('/api/venue/:venueSlug/admin/login', resolveVenue, (req, res) => {
 
 app.post('/api/venue/:venueSlug/admin/logout', resolveVenue, (req, res) => {
   res.clearCookie(sessionCookieName(req.venue.slug), { path: '/' });
+  res.json({ success: true });
+});
+
+app.post('/api/venue/:venueSlug/admin/password', resolveVenue, venueAdminAuth, async (req, res) => {
+  const { current, next } = req.body || {};
+  if (!current || !next) return res.status(400).json({ error: 'Enter your current and new password' });
+  if (String(next).length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
+  if (!verifyPassword(String(current), req.venue.admin_password_hash)) {
+    return res.status(401).json({ error: 'Current password is wrong' });
+  }
+  const hash = hashPassword(String(next));
+  await db.updateVenuePasswordHash(req.venue.id, hash);
+  req.venue.admin_password_hash = hash;
+  setAdminSession(res, req.venue); // keep this device signed in; all others are signed out
   res.json({ success: true });
 });
 
@@ -859,16 +930,17 @@ app.post('/api/register', async (req, res) => {
     const existing = await db.slugExists(desiredSlug);
     if (existing) return res.status(409).json({ error: 'This URL is already taken. Try a different name or custom URL.' });
 
+    const passwordHash = hashPassword(password);
     const result = await db.createVenue({
       name,
       type: type || 'cafe',
       email,
       spotify_email: typeof spotifyEmail === 'string' && /^\S+@\S+\.\S+$/.test(spotifyEmail.trim()) ? spotifyEmail.trim().slice(0, 200) : null,
       slug: desiredSlug,
-      password_hash: hashPassword(password)
+      password_hash: passwordHash
     });
 
-    setAdminSession(res, { id: result.id, slug: result.slug });
+    setAdminSession(res, { id: result.id, slug: result.slug, admin_password_hash: passwordHash });
     res.json({
       success: true,
       venue: {
@@ -906,6 +978,17 @@ app.put('/api/superadmin/venues/:id/plan', superAdminAuth, async (req, res) => {
   res.json({ success: true });
 });
 
+// Generates a temporary password, shown once to the platform owner to pass on to the venue.
+app.post('/api/superadmin/venues/:id/reset-password', superAdminAuth, async (req, res) => {
+  const venue = await db.getVenueById(req.params.id);
+  if (!venue) return res.status(404).json({ error: 'Venue not found' });
+  const alphabet = 'abcdefghjkmnpqrstuvwxyzACDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.randomBytes(12);
+  const temp = Array.from(bytes, b => alphabet[b % alphabet.length]).join('');
+  await db.updateVenuePasswordHash(venue.id, hashPassword(temp));
+  res.json({ success: true, temporaryPassword: temp, adminUrl: `${BASE_URL}/admin/${venue.slug}` });
+});
+
 app.delete('/api/superadmin/venues/:id', superAdminAuth, async (req, res) => {
   await db.deleteVenue(req.params.id);
   res.json({ success: true });
@@ -930,6 +1013,10 @@ async function start() {
   try {
     await db.initializeSchema();
     engine.resumeAll().catch(e => console.error('[Engine Resume Error]', e.message));
+    // Data retention (see /privacy): erase guest IP addresses after 30 days, daily.
+    const purge = () => db.purgeOldGuestData(30).catch(e => console.error('[Retention Error]', e.message));
+    purge();
+    setInterval(purge, 24 * 60 * 60 * 1000).unref();
 
     server.listen(PORT, () => {
       console.log('');

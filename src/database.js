@@ -503,6 +503,15 @@ class QueuePlayDB {
     await this.pool.query(`UPDATE venues SET ${sets.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${values.length}`, values);
   }
 
+  async purgeOldGuestData(days) {
+    const { rowCount } = await this.pool.query(
+      `UPDATE guest_sessions SET ip_address = NULL
+       WHERE ip_address IS NOT NULL AND updated_at < NOW() - ($1 || ' days')::interval`,
+      [String(days)]
+    );
+    if (rowCount) console.log(`[Retention] Erased ${rowCount} guest IP address(es) older than ${days} days`);
+  }
+
   async getRunningVenueIds() {
     const { rows } = await this.pool.query('SELECT id FROM venues WHERE engine_running = 1 AND spotify_connected = 1 AND is_active = 1');
     return rows.map(r => r.id);

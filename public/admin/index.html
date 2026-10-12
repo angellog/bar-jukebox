@@ -292,6 +292,27 @@
             <div id="venueLinks" style="display:flex; flex-direction:column; gap:.75rem"></div>
           </div>
 
+          <!-- Account security -->
+          <div class="qp-card qp-mb-lg" style="padding:1.25rem">
+            <h3 style="font-weight:600; font-size:1rem; margin-bottom:.25rem">🔒 Change admin password</h3>
+            <p class="qp-text-muted qp-text-xs qp-mb-md">Changing it signs out every other device (old phones, ex-staff). This device stays signed in.</p>
+            <form id="passwordForm" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:.75rem; align-items:end">
+              <div>
+                <label class="qp-label" for="pwCurrent">Current password</label>
+                <input type="password" id="pwCurrent" class="qp-input" autocomplete="current-password" required>
+              </div>
+              <div>
+                <label class="qp-label" for="pwNext">New password</label>
+                <input type="password" id="pwNext" class="qp-input" autocomplete="new-password" minlength="6" required>
+              </div>
+              <div>
+                <label class="qp-label" for="pwConfirm">Repeat new password</label>
+                <input type="password" id="pwConfirm" class="qp-input" autocomplete="new-password" minlength="6" required>
+              </div>
+              <div><button type="submit" class="qp-btn qp-btn-primary qp-w-full">Change password</button></div>
+            </form>
+          </div>
+
           <form id="configForm">
             <!-- Rate limits -->
             <div class="qp-card qp-mb-lg" style="padding:1.25rem">
@@ -540,7 +561,7 @@
     const nativeFetch = window.fetch.bind(window);
     window.fetch = async (...args) => {
       const res = await nativeFetch(...args);
-      if (res.status === 401 && String(args[0]).includes('/admin/') && !String(args[0]).endsWith('/admin/login')) {
+      if (res.status === 401 && String(args[0]).includes('/admin/') && !String(args[0]).endsWith('/admin/login') && !String(args[0]).endsWith('/admin/password')) {
         document.getElementById('dashboardSection').classList.add('qp-hidden');
         document.getElementById('loginSection').classList.remove('qp-hidden');
       }
@@ -895,6 +916,24 @@
           btn.disabled = false;
         }
       });
+    });
+
+    document.getElementById('passwordForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const current = document.getElementById('pwCurrent').value;
+      const next = document.getElementById('pwNext').value;
+      if (next !== document.getElementById('pwConfirm').value) return showToast('New passwords do not match', 'error');
+      try {
+        const res = await fetch(`/api/venue/${slug}/admin/password`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ current, next })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        e.target.reset();
+        showToast('Password changed. Other devices have been signed out.', 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
     });
 
     // Edit limits config

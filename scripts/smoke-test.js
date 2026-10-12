@@ -85,7 +85,7 @@ async function main() {
   check('health endpoint', health.status === 200 && health.json?.database === 'ok', JSON.stringify(health.json));
   check('spotify configured', health.json?.spotify === true);
 
-  for (const page of ['/', '/pricing', '/register', '/superadmin']) {
+  for (const page of ['/', '/pricing', '/register', '/superadmin', '/guide', '/hotels', '/changelog', '/login', '/privacy', '/terms']) {
     const r = await anon(page);
     check(`page ${page}`, r.status === 200);
   }
@@ -168,6 +168,35 @@ async function main() {
     await stranger(`/api/venue/${slug}/admin/logout`, { method: 'POST' });
     const afterLogout = await stranger(`/api/venue/${slug}/admin/stats`);
     check('logout ends session', afterLogout.status === 401);
+
+    // ---- Account security ----
+    const deviceA = client();
+    const deviceB = client();
+    await deviceA(`/api/venue/${slug}/admin/login`, { method: 'POST', body: { password } });
+    await deviceB(`/api/venue/${slug}/admin/login`, { method: 'POST', body: { password } });
+    const wrongCurrent = await deviceA(`/api/venue/${slug}/admin/password`, { method: 'POST', body: { current: 'nope', next: 'newpass123' } });
+    check('change password rejects wrong current password', wrongCurrent.status === 401);
+    const changed = await deviceA(`/api/venue/${slug}/admin/password`, { method: 'POST', body: { current: password, next: 'newpass123' } });
+    check('change password', changed.status === 200);
+    check('this device stays signed in after change', (await deviceA(`/api/venue/${slug}/admin/stats`)).status === 200);
+    check('other devices are signed out after change', (await deviceB(`/api/venue/${slug}/admin/stats`)).status === 401);
+    check('owner session from sign-up also signed out', (await owner(`/api/venue/${slug}/admin/stats`)).status === 401);
+
+    const reset = await anon(`/api/superadmin/venues/${venueId}/reset-password`, { method: 'POST', headers: { 'x-super-key': SUPER_KEY } });
+    const temp = reset.json?.temporaryPassword;
+    check('super admin reset gives a temporary password', reset.status === 200 && typeof temp === 'string' && temp.length >= 10);
+    check('reset signs out existing sessions', (await deviceA(`/api/venue/${slug}/admin/stats`)).status === 401);
+    const tempLogin = await owner(`/api/venue/${slug}/admin/login`, { method: 'POST', body: { password: temp } });
+    check('temporary password logs in', tempLogin.status === 200);
+
+    const attacker = client();
+    let lastStatus = 0;
+    for (let i = 0; i < 11; i++) {
+      lastStatus = (await attacker(`/api/venue/${slug}/admin/login`, { method: 'POST', body: { password: `guess${i}` } })).status;
+    }
+    check('repeated wrong passwords get blocked', lastStatus === 429);
+    const blockedRight = await attacker(`/api/venue/${slug}/admin/login`, { method: 'POST', body: { password: temp } });
+    check('block holds even for the right password', blockedRight.status === 429);
 
     // A fresh venue has no Spotify account connected. Spotify Development Mode apps
     // can't search without one, so either real results or the clear 503 is acceptable.
