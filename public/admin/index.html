@@ -514,6 +514,10 @@
                 <button id="downloadQrBtn" class="qp-btn qp-btn-primary qp-btn-sm">💾 Download Image</button>
                 <button id="copyUrlBtn" class="qp-btn qp-btn-secondary qp-btn-sm">📋 Copy Link</button>
               </div>
+              <div class="qp-flex qp-gap-sm qp-justify-center qp-mt-sm">
+                <a id="printCardsBtn" href="#" target="_blank" class="qp-btn qp-btn-secondary qp-btn-sm">🖨 Print table cards</a>
+                <a id="printPosterBtn" href="#" target="_blank" class="qp-btn qp-btn-secondary qp-btn-sm">🖼 Print poster</a>
+              </div>
             </div>
           </div>
         </section>
@@ -1282,6 +1286,13 @@
           a.download = `qp-qr-${slug}.png`;
           a.click();
         };
+
+        document.getElementById('printCardsBtn').href = `/v/${slug}/print`;
+        document.getElementById('printPosterBtn').href = `/v/${slug}/print?layout=poster`;
+        ['printCardsBtn', 'printPosterBtn'].forEach(id => document.getElementById(id).addEventListener('click', () => {
+          store.set(QR_FLAG, '1');
+          renderChecklist();
+        }));
 
         document.getElementById('copyUrlBtn').onclick = () => {
           store.set(QR_FLAG, '1');
