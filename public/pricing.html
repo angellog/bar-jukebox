@@ -114,7 +114,7 @@
 
     <section class="pricing-header">
       <h1 class="qp-h1">Simple, transparent <span class="qp-gradient-text">pricing.</span></h1>
-      <p>Start free. Upgrade as your venue grows. No hidden fees, cancel anytime.</p>
+      <p>Start free. Upgrade as your venue grows. Prepaid in UGX with Mobile Money or card. Nothing renews automatically.</p>
       <div class="billing-toggle">
         <button class="active" data-billing="monthly">Monthly</button>
         <button data-billing="yearly">Yearly <span class="billing-save">Save 17%</span></button>
@@ -137,19 +137,23 @@
       </div>
       <div class="faq-item">
         <div class="faq-q">How do I control what gets played?</div>
-        <div class="faq-a">You have full admin controls: skip songs, remove items from the queue, block specific tracks, filter explicit content, and set rate limits per guest.</div>
+        <div class="faq-a">From your dashboard you can start, pause and skip, remove any song from the queue, block explicit content, and set limits per guest (cooldown and songs per day).</div>
       </div>
       <div class="faq-item">
         <div class="faq-q">Can I use my own branding?</div>
-        <div class="faq-a">On Starter plans and above, you can customize colors, logo, fonts, welcome message, and even inject custom CSS. Your guests see your brand, not ours.</div>
+        <div class="faq-a">Yes, on every plan: your logo, colours, font and welcome message on the guest page, plus a QR code in your colours.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">How do I pay?</div>
+        <div class="faq-a">From your dashboard (Plan &amp; Billing), pay for 1, 3 or 12 months with MTN or Airtel Mobile Money or a card, securely through Flutterwave. 12 months costs the price of 10. Nothing renews automatically; we remind you before your plan ends.</div>
       </div>
       <div class="faq-item">
         <div class="faq-q">What happens when the queue is empty?</div>
-        <div class="faq-a">When no songs are queued, the player simply waits. You can optionally set up a fallback playlist on your Spotify account.</div>
+        <div class="faq-a">Turn on background music and QueuePlay keeps playing from genres or a playlist you choose. Guest requests always play next.</div>
       </div>
     </section>
 
-    <footer><p>QueuePlay &mdash; Guest-powered music for modern venues.</p></footer>
+    <footer><p>QueuePlay &mdash; Guest-powered music for modern venues.</p><p class="qp-mt-sm"><a href="/guide">Guide</a> &middot; <a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a></p><p class="qp-mt-sm" style="font-size:.78rem">&copy; 2026 Feetbit Group Of Companies SMC-Limited</p></footer>
   </div>
 
   <script>
@@ -174,8 +178,9 @@
         const { plans } = await res.json();
 
         document.getElementById('pricingGrid').innerHTML = plans.map(plan => {
-          const price = billing === 'yearly' ? plan.price_yearly : plan.price_monthly;
-          const period = billing === 'yearly' ? '/year' : '/month';
+          const monthly = plan.price_ugx_monthly || 0;
+          const price = billing === 'yearly' ? monthly * 10 : monthly;
+          const period = billing === 'yearly' ? '/year (2 months free)' : '/month';
           const isFeatured = plan.id === 'pro';
           const isFree = plan.id === 'free';
 
@@ -186,7 +191,7 @@
               <div class="plan-desc">${plan.description}</div>
               <div class="plan-price">
                 <div class="plan-amount">
-                  ${isFree ? 'Free' : `<span class="plan-currency">$</span>${price.toFixed(0)}`}
+                  ${isFree ? 'Free' : `<span class="plan-currency">UGX</span> ${Number(price).toLocaleString('en-US')}`}
                 </div>
                 ${!isFree ? `<div class="plan-period">${period}</div>` : '<div class="plan-period">forever</div>'}
               </div>

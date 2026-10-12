@@ -88,7 +88,14 @@ SUPER_ADMIN_KEY=... npm run smoke -- <url>                    # also registers, 
 - Sessions are bound to the password: changing it (Settings) or a super-admin reset signs out every other device. Super admin "Reset password" issues a one-time temporary password (no email service needed).
 - Data retention: guest IP addresses are erased after 30 days (daily job), as stated on `/privacy`.
 
-## Not built yet
+## Billing (Flutterwave, prepaid)
 
-- Billing: plans exist and the super admin can change a venue's plan, but there is no Stripe checkout.
+- Venues pay in the dashboard (**Plan & Billing**) for 1, 3 or 12 months (12 charged as 10) via Flutterwave hosted checkout: MTN/Airtel Mobile Money Uganda or card. Prices live in `src/billing.js` (`MONTHLY_PRICE`, UGX) and sync to the database on boot.
+- No auto-renew (Flutterwave recurring plans are card-only). Expired plans drop to Free hourly; dashboard banner from 7 days before.
+- A plan activates only after `GET /transactions/:id/verify` confirms status, `tx_ref`, amount and currency. The redirect (`/billing/return`) and webhook (`POST /api/webhooks/flutterwave`, `verif-hash` header) both just trigger that check; applying is idempotent.
+- Super admin plan changes are "comped" (no expiry).
+- Env: `FLW_SECRET_KEY` (payments are off without it), `FLW_WEBHOOK_HASH`, optional `FLW_API_BASE` (tests).
+- Test: `npm run test:billing` against a fake Flutterwave (see `scripts/billing-test.js`).
+
+## Not built yet
 - Venues connected before v1.1 must reconnect Spotify once to let QueuePlay list their playlists (new scope); playback works without it.

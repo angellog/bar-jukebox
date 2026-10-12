@@ -48,6 +48,7 @@
             <tr><td><strong>Venues</strong></td><td>Venue name and type; contact email (optional); the email of the venue's Spotify account; admin password (stored only as a salted hash); branding and settings.</td><td>To run your account, activate Spotify access and support you.</td></tr>
             <tr><td><strong>Venues: Spotify</strong></td><td>Access tokens Spotify gives us when you connect. We never see your Spotify password. With your permission we read your playlists, search the catalogue and control playback.</td><td>To search songs and play music on the device you choose.</td></tr>
             <tr><td><strong>Guests</strong></td><td>A random identifier in a cookie, your IP address, the songs you request and when, and any name or table number you choose to type.</td><td>To apply the venue's fair-use limits (cooldowns and daily caps) and show the queue.</td></tr>
+            <tr><td><strong>Venues: payments</strong></td><td>Plan bought, amount, date, payment method type (e.g. mobile money or card), Flutterwave's transaction reference, and the receipt email you enter.</td><td>To activate your plan and keep accounting records. Card numbers and mobile money PINs are entered on Flutterwave's page, never on ours.</td></tr>
             <tr><td><strong>Everyone</strong></td><td>Basic server logs (time, page requested, IP address, browser type).</td><td>Security, troubleshooting and preventing abuse.</td></tr>
           </tbody>
         </table>
@@ -67,6 +68,7 @@
       <ul>
         <li><strong>The venue:</strong> venue staff see the songs requested at their venue and any name or table number a guest typed.</li>
         <li><strong>Spotify:</strong> searches and playback commands are sent to Spotify on the venue's behalf. Spotify's own privacy policy applies to Spotify accounts.</li>
+        <li><strong>Payments:</strong> Flutterwave processes venue payments and receives the details needed to take the payment.</li>
         <li><strong>Hosting:</strong> our servers and database are provided by Railway (United States).</li>
         <li><strong>Fonts and player:</strong> pages load fonts from Google Fonts, and the Player page loads Spotify's web player. These providers receive your IP address when your browser fetches them.</li>
       </ul>
@@ -76,6 +78,7 @@
       <ul>
         <li><strong>Guest IP addresses:</strong> erased automatically after <strong>30 days</strong>.</li>
         <li><strong>Requests and play history:</strong> kept for the venue's statistics while the venue's account exists.</li>
+        <li><strong>Payment records:</strong> kept as long as needed for accounting and tax law.</li>
         <li><strong>Venue accounts:</strong> until the venue asks us to delete the account. Deletion removes its queue, history, guest records and Spotify tokens.</li>
         <li><strong>Server logs:</strong> kept by our hosting provider for a limited period for security.</li>
       </ul>
