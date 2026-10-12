@@ -1,0 +1,60 @@
+# Nightly encrypted database backup, stored as a GitHub Actions artifact (30 days).
+#
+# OFF until both repository secrets exist (Settings → Secrets and variables → Actions):
+#   DATABASE_BACKUP_URL  Postgres connection string reachable from the internet
+#                        (Railway → Postgres → Settings → Networking → enable TCP Proxy,
+#                         then use the public DATABASE_PUBLIC_URL)
+#   BACKUP_PASSPHRASE    long random passphrase used to encrypt the dump (keep a copy offline)
+#
+# Restore: download the artifact, then
+#   openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in queueplay.dump.enc -out queueplay.dump -pass pass:<passphrase>
+#   pg_restore --clean --no-owner -d <DATABASE_URL> queueplay.dump
+
+name: Nightly database backup
+
+on:
+  schedule:
+    - cron: '0 2 * * *'   # 02:00 UTC (05:00 Kampala)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_BACKUP_URL: ${{ secrets.DATABASE_BACKUP_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - name: Check configuration
+        id: cfg
+        run: |
+          if [ -z "$DATABASE_BACKUP_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "Backup secrets not set; skipping (this is expected until backups are switched on)."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Dump database (Postgres 18 client)
+        if: steps.cfg.outputs.enabled == 'true'
+        run: |
+          docker run --rm -e DATABASE_BACKUP_URL -v "$PWD:/out" postgres:18 \
+            sh -c 'pg_dump --format=custom --no-owner --file=/out/queueplay.dump "$DATABASE_BACKUP_URL"'
+          ls -lh queueplay.dump
+
+      - name: Encrypt
+        if: steps.cfg.outputs.enabled == 'true'
+        run: |
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in queueplay.dump -out queueplay.dump.enc -pass env:BACKUP_PASSPHRASE
+          rm queueplay.dump
+
+      - name: Upload encrypted backup
+        if: steps.cfg.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: queueplay-db-${{ github.run_id }}
+          path: queueplay.dump.enc
+          retention-days: 30

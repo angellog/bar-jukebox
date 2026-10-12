@@ -620,6 +620,33 @@ class QueuePlayDB {
     if (rowCount) console.log(`[Retention] Erased ${rowCount} guest IP address(es) older than ${days} days`);
   }
 
+  // Full logical backup for the super-admin "Download backup" button.
+  // Secrets that can be re-created are left out: Spotify tokens (venues
+  // reconnect after a restore) and per-venue API keys. Guest IPs are dropped.
+  async exportAll() {
+    const q = sql => this.pool.query(sql).then(r => r.rows);
+    const venues = await q('SELECT * FROM venues ORDER BY created_at');
+    for (const v of venues) {
+      delete v.spotify_access_token;
+      delete v.spotify_refresh_token;
+      delete v.spotify_token_expires_at;
+      delete v.admin_key;
+    }
+    return {
+      format: 'queueplay-backup',
+      version: 1,
+      createdAt: new Date().toISOString(),
+      tables: {
+        subscription_plans: await q('SELECT * FROM subscription_plans ORDER BY id'),
+        venues,
+        payments: await q('SELECT * FROM payments ORDER BY id'),
+        queue: await q("SELECT * FROM queue WHERE status = 'pending' ORDER BY id"),
+        playback_history: await q('SELECT * FROM playback_history ORDER BY id'),
+        guest_sessions: await q('SELECT venue_id, guest_id, last_request_at, request_count, songs_today, last_song_date, created_at, updated_at FROM guest_sessions ORDER BY id')
+      }
+    };
+  }
+
   async getRunningVenueIds() {
     const { rows } = await this.pool.query('SELECT id FROM venues WHERE engine_running = 1 AND spotify_connected = 1 AND is_active = 1');
     return rows.map(r => r.id);
@@ -812,12 +839,13 @@ class QueuePlayDB {
     const { rows: totalGuests } = await this.pool.query('SELECT COUNT(*)::int as count FROM guest_sessions');
 
     const { rows: revenueByPlan } = await this.pool.query(`
-      SELECT sp.name, sp.price_monthly, COUNT(v.id)::int as venue_count,
-        COUNT(v.id) * sp.price_monthly as monthly_revenue
+      SELECT sp.name, sp.price_ugx_monthly, COUNT(v.id)::int as venue_count,
+        COUNT(v.id) * COALESCE(sp.price_ugx_monthly, 0) as monthly_revenue
       FROM subscription_plans sp
       LEFT JOIN venues v ON v.plan_id = sp.id AND v.is_active = 1
-      GROUP BY sp.id, sp.name, sp.price_monthly
-      ORDER BY sp.price_monthly ASC
+        AND (v.subscription_expires_at IS NULL OR v.subscription_expires_at > NOW())
+      GROUP BY sp.id, sp.name, sp.price_ugx_monthly
+      ORDER BY sp.price_ugx_monthly ASC NULLS FIRST
     `);
 
     const totalMRR = revenueByPlan.reduce((sum, p) => sum + Number(p.monthly_revenue || 0), 0);

@@ -169,6 +169,13 @@ async function main() {
     const afterLogout = await stranger(`/api/venue/${slug}/admin/stats`);
     check('logout ends session', afterLogout.status === 401);
 
+    // ---- Backups ----
+    const exp = await anon('/api/superadmin/export', { headers: { 'x-super-key': SUPER_KEY } });
+    const expVenue = exp.json?.tables?.venues?.find(v => v.slug === slug);
+    check('super admin backup download', exp.status === 200 && exp.json?.format === 'queueplay-backup' && !!expVenue);
+    check('backup leaves out secrets', expVenue && !('spotify_refresh_token' in expVenue) && !('spotify_access_token' in expVenue) && !('admin_key' in expVenue));
+    check('backup requires the super admin key', (await anon('/api/superadmin/export')).status === 401);
+
     // ---- Account security ----
     const deviceA = client();
     const deviceB = client();

@@ -53,14 +53,18 @@
         <h1 class="qp-h2">🌐 Master Control Dashboard</h1>
         <p class="qp-text-secondary qp-text-sm">Manage subscription metrics, platforms, databases, and venues.</p>
       </div>
-      <button id="logoutBtn" class="qp-btn qp-btn-secondary qp-btn-sm">Log Out</button>
+      <div style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; justify-content:flex-end">
+        <span id="backupNote" class="qp-text-xs qp-text-muted"></span>
+        <button id="backupBtn" class="qp-btn qp-btn-primary qp-btn-sm">⬇ Download backup</button>
+        <button id="logoutBtn" class="qp-btn qp-btn-secondary qp-btn-sm">Log Out</button>
+      </div>
     </div>
 
     <!-- Stats -->
     <div class="qp-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2.5rem">
       <div class="qp-stat">
-        <div class="mrr-highlight" id="statMRR">$0</div>
-        <div class="qp-stat-label">Estimated Monthly Recurring Revenue</div>
+        <div class="mrr-highlight" id="statMRR">UGX 0</div>
+        <div class="qp-stat-label">Monthly revenue (UGX, active paid plans)</div>
       </div>
       <div class="qp-stat">
         <div class="qp-stat-value" id="statTotalVenues">0</div>
@@ -112,6 +116,40 @@
 
   <script>
     let masterKey = localStorage.getItem('qp_super_key');
+    const BACKUP_FLAG = 'qp_last_backup';
+
+    function renderBackupNote() {
+      const last = Number(localStorage.getItem(BACKUP_FLAG) || 0);
+      const note = document.getElementById('backupNote');
+      if (!last) { note.textContent = '⚠️ No backup downloaded yet'; note.style.color = '#fbbf24'; return; }
+      const days = Math.floor((Date.now() - last) / 86400000);
+      note.textContent = days === 0 ? 'Last backup: today' : `Last backup: ${days} day${days === 1 ? '' : 's'} ago`;
+      note.style.color = days >= 7 ? '#fbbf24' : '';
+    }
+
+    document.getElementById('backupBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('backupBtn');
+      btn.disabled = true;
+      btn.textContent = 'Preparing…';
+      try {
+        const res = await fetch('/api/superadmin/export', { headers: { 'x-super-key': masterKey } });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Backup failed');
+        const blob = await res.blob();
+        const name = (res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1] || 'queueplay-backup.json';
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        localStorage.setItem(BACKUP_FLAG, String(Date.now()));
+        renderBackupNote();
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '⬇ Download backup';
+      }
+    });
 
     // Toast manager
     function showToast(message, type = 'info') {
@@ -143,6 +181,7 @@
     async function initSuperadmin() {
       document.getElementById('authGate').classList.add('qp-hidden');
       document.getElementById('superadminSection').classList.remove('qp-hidden');
+      renderBackupNote();
 
       try {
         await loadPlatformMetrics();
@@ -162,7 +201,7 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      document.getElementById('statMRR').textContent = `$${data.totalMRR.toFixed(2)}`;
+      document.getElementById('statMRR').textContent = `UGX ${Math.round(data.totalMRR).toLocaleString('en-US')}`;
       document.getElementById('statTotalVenues').textContent = data.totalVenues;
       document.getElementById('statSongsPlayed').textContent = data.totalSongsPlayed;
       document.getElementById('statActiveUsers').textContent = data.totalGuests;

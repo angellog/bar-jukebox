@@ -1077,6 +1077,19 @@ app.get('/api/superadmin/stats', superAdminAuth, async (req, res) => {
   res.json(stats);
 });
 
+app.get('/api/superadmin/export', superAdminAuth, async (req, res) => {
+  try {
+    const data = await db.exportAll();
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+    res.setHeader('Content-Disposition', `attachment; filename="queueplay-backup-${stamp}.json"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(data);
+  } catch (error) {
+    console.error('[Export Error]', error.message);
+    res.status(500).json({ error: 'Backup failed' });
+  }
+});
+
 app.get('/api/superadmin/venues', superAdminAuth, async (req, res) => {
   const venues = await db.getAllVenues();
   res.json({ venues });

@@ -97,5 +97,14 @@ SUPER_ADMIN_KEY=... npm run smoke -- <url>                    # also registers, 
 - Env: `FLW_SECRET_KEY` (payments are off without it), `FLW_WEBHOOK_HASH`, optional `FLW_API_BASE` (tests).
 - Test: `npm run test:billing` against a fake Flutterwave (see `scripts/billing-test.js`).
 
+## Backups (no Railway Pro needed)
+
+1. **Manual (on now):** super admin → **⬇ Download backup** saves a JSON file with all venues, settings, payments, history and plans. Spotify tokens, per-venue API keys and guest IPs are left out. The page warns when the last download is 7+ days old (per browser). Keep the files somewhere safe (they contain venue emails and password hashes).
+   Restore into an **empty** database: `DATABASE_URL=... node scripts/restore-backup.js queueplay-backup-....json` (`--merge` to add into a non-empty one). Venues reconnect Spotify afterwards.
+2. **Nightly (off until switched on):** `.github/workflows/db-backup.yml` runs `pg_dump` at 02:00 UTC, encrypts it (AES-256, PBKDF2) and stores it as a 30-day GitHub Actions artifact. Switch on when the first venue pays:
+   - Railway → Postgres → Settings → Networking → enable **TCP Proxy**; copy `DATABASE_PUBLIC_URL`.
+   - GitHub repo → Settings → Secrets and variables → Actions: add `DATABASE_BACKUP_URL` and `BACKUP_PASSPHRASE` (store the passphrase offline too).
+   - Run it once from the Actions tab (**Run workflow**) and check the artifact appears.
+
 ## Not built yet
 - Venues connected before v1.1 must reconnect Spotify once to let QueuePlay list their playlists (new scope); playback works without it.
