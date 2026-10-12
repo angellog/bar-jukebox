@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="How QueuePlay collects, uses and protects data from venues and guests.">
+  <title>Privacy Policy · QueuePlay</title>
+  <link rel="stylesheet" href="/assets/design-system.css">
+  <style>
+    .nav{display:flex;justify-content:space-between;align-items:center;padding:1.25rem 0;gap:1rem}
+    .nav-brand{display:flex;align-items:center;gap:.6rem;font-size:1.3rem;font-weight:700}
+    .nav-brand-icon{width:34px;height:34px;border-radius:var(--qp-radius-sm);background:linear-gradient(135deg,var(--qp-primary),var(--qp-secondary));display:flex;align-items:center;justify-content:center;font-size:1rem}
+    .nav-links{display:flex;gap:1.25rem;flex-wrap:wrap}
+    .nav-links a{font-size:.9rem;color:var(--qp-text-secondary)}
+    .legal{max-width:760px;margin:0 auto;padding:2rem 0 4rem}
+    .legal .updated{color:var(--qp-text-muted);font-size:.85rem;margin-top:.4rem}
+    .legal h2{font-size:1.15rem;font-weight:700;margin:2rem 0 .6rem}
+    .legal p,.legal li,.legal td{font-size:.93rem;color:var(--qp-text-secondary);line-height:1.7}
+    .legal ul{padding-left:1.25rem}
+    .legal li{margin-bottom:.35rem}
+    .legal strong{color:var(--qp-text)}
+    .legal a{text-decoration:underline}
+    table{width:100%;border-collapse:collapse;margin-top:.5rem}
+    th,td{text-align:left;padding:.55rem .6rem;border-bottom:1px solid var(--qp-glass-border);vertical-align:top}
+    th{font-size:.8rem;text-transform:uppercase;letter-spacing:.04em;color:var(--qp-text)}
+    .table-wrap{overflow-x:auto}
+    footer{padding:2.5rem 0;text-align:center;color:var(--qp-text-muted);font-size:.85rem;border-top:1px solid var(--qp-glass-border)}
+  </style>
+</head>
+<body>
+  <div class="qp-container">
+    <nav class="nav">
+      <a href="/" class="nav-brand"><span class="nav-brand-icon">Q</span><span>QueuePlay</span></a>
+      <div class="nav-links"><a href="/guide">Guide</a><a href="/terms">Terms</a><a href="/login">Log in</a></div>
+    </nav>
+
+    <article class="legal">
+      <h1 class="qp-h2">Privacy Policy</h1>
+      <p class="updated">Last updated: 12 October 2026</p>
+
+      <p>QueuePlay ("we", "us") lets venues run a shared music queue that their guests can add songs to. This policy explains what data we collect from <strong>venues</strong> (businesses that sign up) and <strong>guests</strong> (people who scan a venue's QR code), why, and your choices.</p>
+
+      <h2>1. Data we collect</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>From</th><th>What</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Venues</strong></td><td>Venue name and type; contact email (optional); the email of the venue's Spotify account; admin password (stored only as a salted hash); branding and settings.</td><td>To run your account, activate Spotify access and support you.</td></tr>
+            <tr><td><strong>Venues: Spotify</strong></td><td>Access tokens Spotify gives us when you connect. We never see your Spotify password. With your permission we read your playlists, search the catalogue and control playback.</td><td>To search songs and play music on the device you choose.</td></tr>
+            <tr><td><strong>Guests</strong></td><td>A random identifier in a cookie, your IP address, the songs you request and when, and any name or table number you choose to type.</td><td>To apply the venue's fair-use limits (cooldowns and daily caps) and show the queue.</td></tr>
+            <tr><td><strong>Everyone</strong></td><td>Basic server logs (time, page requested, IP address, browser type).</td><td>Security, troubleshooting and preventing abuse.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Guests don't need an account, and we don't ask guests for names, phone numbers or payment details.</p>
+
+      <h2>2. Cookies and local storage</h2>
+      <ul>
+        <li><strong>qp_guest</strong> (guests, up to 1 year): a random ID so a venue's request limits apply per phone.</li>
+        <li><strong>qp_admin_&lt;venue&gt;</strong> (venue staff, up to 30 days): keeps you logged in to your dashboard. It stops working if the password changes.</li>
+        <li><strong>qp_oauth_return</strong> (15 minutes): remembers where to return after connecting Spotify.</li>
+        <li>Your browser's local storage holds small conveniences, such as your last venue link and whether you've seen the welcome screen.</li>
+      </ul>
+      <p>We don't use advertising or cross-site tracking cookies.</p>
+
+      <h2>3. Who we share data with</h2>
+      <ul>
+        <li><strong>The venue:</strong> venue staff see the songs requested at their venue and any name or table number a guest typed.</li>
+        <li><strong>Spotify:</strong> searches and playback commands are sent to Spotify on the venue's behalf. Spotify's own privacy policy applies to Spotify accounts.</li>
+        <li><strong>Hosting:</strong> our servers and database are provided by Railway (United States).</li>
+        <li><strong>Fonts and player:</strong> pages load fonts from Google Fonts, and the Player page loads Spotify's web player. These providers receive your IP address when your browser fetches them.</li>
+      </ul>
+      <p>We don't sell personal data, and we don't use it for advertising.</p>
+
+      <h2>4. How long we keep it</h2>
+      <ul>
+        <li><strong>Guest IP addresses:</strong> erased automatically after <strong>30 days</strong>.</li>
+        <li><strong>Requests and play history:</strong> kept for the venue's statistics while the venue's account exists.</li>
+        <li><strong>Venue accounts:</strong> until the venue asks us to delete the account. Deletion removes its queue, history, guest records and Spotify tokens.</li>
+        <li><strong>Server logs:</strong> kept by our hosting provider for a limited period for security.</li>
+      </ul>
+
+      <h2>5. Security</h2>
+      <p>All traffic is encrypted (HTTPS). Passwords are stored as salted scrypt hashes. Repeated wrong passwords are temporarily blocked. Access to production systems is limited to the QueuePlay team.</p>
+
+      <h2>6. Your rights</h2>
+      <p>You can ask to see, correct or delete data about you, or object to how we use it, including under Uganda's Data Protection and Privacy Act, 2019. Venues can disconnect Spotify at any time from Spotify's account settings ("Apps"). Contact us at the address below; we'll reply within 30 days.</p>
+
+      <h2>7. Children</h2>
+      <p>QueuePlay is for venues and their adult guests. It isn't directed at children.</p>
+
+      <h2>8. Changes</h2>
+      <p>We'll post updates on this page and change the date above. Material changes will be announced to venues by email or in the dashboard.</p>
+
+      <h2>9. Contact</h2>
+      <p>Questions or requests: <a id="contactEmail" href="#">contact the QueuePlay team</a>.</p>
+    </article>
+
+    <footer>
+      <p><a href="/">Home</a> &middot; <a href="/guide">Guide</a> &middot; <a href="/terms">Terms</a> &middot; <a href="/privacy">Privacy</a></p>
+    </footer>
+  </div>
+  <script>
+    fetch('/api/public-config').then(r => r.json()).then(cfg => {
+      if (!cfg.supportEmail) return;
+      const a = document.getElementById('contactEmail');
+      a.href = `mailto:${cfg.supportEmail}`;
+      a.textContent = cfg.supportEmail;
+    }).catch(() => {});
+  </script>
+</body>
+</html>

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Terms of use for QueuePlay venues and guests.">
+  <title>Terms of Use · QueuePlay</title>
+  <link rel="stylesheet" href="/assets/design-system.css">
+  <style>
+    .nav{display:flex;justify-content:space-between;align-items:center;padding:1.25rem 0;gap:1rem}
+    .nav-brand{display:flex;align-items:center;gap:.6rem;font-size:1.3rem;font-weight:700}
+    .nav-brand-icon{width:34px;height:34px;border-radius:var(--qp-radius-sm);background:linear-gradient(135deg,var(--qp-primary),var(--qp-secondary));display:flex;align-items:center;justify-content:center;font-size:1rem}
+    .nav-links{display:flex;gap:1.25rem;flex-wrap:wrap}
+    .nav-links a{font-size:.9rem;color:var(--qp-text-secondary)}
+    .legal{max-width:760px;margin:0 auto;padding:2rem 0 4rem}
+    .legal .updated{color:var(--qp-text-muted);font-size:.85rem;margin-top:.4rem}
+    .legal h2{font-size:1.15rem;font-weight:700;margin:2rem 0 .6rem}
+    .legal p,.legal li{font-size:.93rem;color:var(--qp-text-secondary);line-height:1.7}
+    .legal ul{padding-left:1.25rem}
+    .legal li{margin-bottom:.35rem}
+    .legal strong{color:var(--qp-text)}
+    .legal a{text-decoration:underline}
+    footer{padding:2.5rem 0;text-align:center;color:var(--qp-text-muted);font-size:.85rem;border-top:1px solid var(--qp-glass-border)}
+  </style>
+</head>
+<body>
+  <div class="qp-container">
+    <nav class="nav">
+      <a href="/" class="nav-brand"><span class="nav-brand-icon">Q</span><span>QueuePlay</span></a>
+      <div class="nav-links"><a href="/guide">Guide</a><a href="/privacy">Privacy</a><a href="/login">Log in</a></div>
+    </nav>
+
+    <article class="legal">
+      <h1 class="qp-h2">Terms of Use</h1>
+      <p class="updated">Last updated: 12 October 2026</p>
+
+      <p>These terms apply to anyone using QueuePlay: <strong>venues</strong> that create an account and <strong>guests</strong> who request songs at a venue. By using QueuePlay you agree to them.</p>
+
+      <h2>1. The service</h2>
+      <p>QueuePlay provides a web page where guests can search for songs and add them to a venue's queue, and a dashboard where the venue controls playback through a music service the venue connects. QueuePlay doesn't supply music. Music comes from the venue's own music service account.</p>
+
+      <h2>2. Early access</h2>
+      <p>QueuePlay is currently in early access. Features may change, and the service is provided "as is" without guarantees of availability or fitness for a particular purpose.</p>
+
+      <h2>3. Venue responsibilities</h2>
+      <ul>
+        <li><strong>Music rights and licences.</strong> The venue is solely responsible for having the right to play music publicly at its premises. This includes using a music service whose terms permit that use and holding any required public-performance licences (in Uganda, from the Uganda Performing Right Society, UPRS). Consumer streaming subscriptions are generally licensed for personal use only.</li>
+        <li><strong>Accounts.</strong> Keep your admin password confidential, use a strong one, and change it when staff leave. You're responsible for activity in your dashboard.</li>
+        <li><strong>Accurate information.</strong> Provide accurate details at sign-up and keep them up to date.</li>
+        <li><strong>Your guests.</strong> Use the controls provided (limits, explicit filter, removing songs) to keep your venue's music appropriate.</li>
+      </ul>
+
+      <h2>4. Guest use</h2>
+      <ul>
+        <li>Request songs in good faith and respect the venue's limits.</li>
+        <li>Don't try to bypass limits, overload the service, or interfere with other guests.</li>
+        <li>Any name or table number you type is visible to venue staff. Don't enter anything offensive or anyone else's personal information.</li>
+        <li>The venue decides what plays and may remove any request.</li>
+      </ul>
+
+      <h2>5. Acceptable use</h2>
+      <p>You may not use QueuePlay to break the law, infringe others' rights, attempt unauthorised access, scrape or reverse-engineer the service, or disrupt it for others.</p>
+
+      <h2>6. Fees</h2>
+      <p>Plans and prices are shown on the <a href="/pricing">pricing page</a>. During early access, venues may use the service free of charge unless agreed otherwise in writing. We'll give notice before any charges begin.</p>
+
+      <h2>7. Third-party services</h2>
+      <p>QueuePlay works with services such as Spotify. Your use of those services is governed by their own terms. If a third party changes or withdraws its service, features of QueuePlay may stop working.</p>
+
+      <h2>8. Suspension and termination</h2>
+      <p>You can stop using QueuePlay at any time and ask us to delete your venue. We may suspend or end access for breach of these terms, misuse, or if a music service requires it.</p>
+
+      <h2>9. Liability</h2>
+      <p>To the extent permitted by law, QueuePlay isn't liable for indirect or consequential losses, lost profits, or claims arising from music a venue chooses to play, and our total liability is limited to the amount the venue paid us in the 12 months before the claim.</p>
+
+      <h2>10. Changes</h2>
+      <p>We may update these terms. We'll post changes here and update the date above; continued use after changes means you accept them.</p>
+
+      <h2>11. Governing law</h2>
+      <p>These terms are governed by the laws of Uganda.</p>
+
+      <h2>12. Contact</h2>
+      <p><a id="contactEmail" href="#">Contact the QueuePlay team</a>.</p>
+    </article>
+
+    <footer>
+      <p><a href="/">Home</a> &middot; <a href="/guide">Guide</a> &middot; <a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a></p>
+    </footer>
+  </div>
+  <script>
+    fetch('/api/public-config').then(r => r.json()).then(cfg => {
+      if (!cfg.supportEmail) return;
+      const a = document.getElementById('contactEmail');
+      a.href = `mailto:${cfg.supportEmail}`;
+      a.textContent = cfg.supportEmail;
+    }).catch(() => {});
+  </script>
+</body>
+</html>
