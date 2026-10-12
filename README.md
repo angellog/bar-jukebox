@@ -49,7 +49,7 @@ Railway project `queueplay-jukebox`, two environments, each with its own app + P
 
 Workflow: build on a feature branch → test on staging → merge to `main` → production. Releases are tagged (`v1.0.0-mvp`, `v1.1.0`); roll back by redeploying a tag.
 
-The GitHub push webhook isn't firing (Oct 2026). Until Railway's GitHub app is granted access to this repo, trigger deploys from the Railway dashboard or by reconnecting the service source.
+Pushes to `main` deploy automatically to production and staging (Railway's GitHub app has access to this repo).
 
 Required variables: `DATABASE_URL` (reference `${{Postgres.DATABASE_URL}}`), `BASE_URL`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SUPER_ADMIN_KEY`, `SALT`. Optional: `SUPPORT_EMAIL` (shown in the guide for activation and help). Health check: `GET /api/health`.
 
