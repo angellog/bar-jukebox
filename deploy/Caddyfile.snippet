@@ -1,0 +1,11 @@
+# Add to the shared base's Caddyfile, then: docker exec caddy caddy reload --config /etc/caddy/Caddyfile
+# Caddy gets the HTTPS certificate on its own and proxies WebSockets with no extra config.
+{$QUEUEPLAY_HOST} {
+	encode gzip
+	reverse_proxy queueplay:3000
+}
+
+# Staging (only if the staging profile runs)
+# {$QUEUEPLAY_STAGING_HOST} {
+# 	reverse_proxy queueplay-staging:3000
+# }

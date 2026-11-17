@@ -1,0 +1,42 @@
+# QueuePlay on the shared Oracle VM.
+# Joins the shared base's `infra` network, where `postgres` and `caddy` run.
+# Run from the repo root on the VM:  docker compose -f deploy/compose.yml up -d --build
+name: queueplay
+
+services:
+  app:
+    build: ..
+    image: queueplay:latest
+    container_name: queueplay
+    restart: unless-stopped
+    init: true
+    env_file: ../.env            # on the VM only; see deploy/.env.vm.example
+    environment:
+      PORT: "3000"
+      NODE_ENV: production
+    mem_limit: 384m
+    cpus: 0.5
+    networks: [infra]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # Optional staging copy. Start with:  docker compose -f deploy/compose.yml --profile staging up -d
+  app-staging:
+    profiles: [staging]
+    build: ..
+    image: queueplay:latest
+    container_name: queueplay-staging
+    restart: unless-stopped
+    init: true
+    env_file: ../.env.staging
+    environment:
+      PORT: "3000"
+      NODE_ENV: production
+    mem_limit: 256m
+    cpus: 0.25
+    networks: [infra]
+
+networks:
+  infra:
+    external: true

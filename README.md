@@ -38,7 +38,11 @@ npm start              # http://localhost:3000
 
 Requires Node 20+ and PostgreSQL. The schema is created automatically on boot.
 
-## Deploy (Railway)
+## Deploy
+
+> **Moving to the Oracle VM (zero monthly bills).** Production is still on Railway until the cutover in [`deploy/README.md`](deploy/README.md) is done; after that, pushes to `main` deploy to the VM via `.github/workflows/deploy-vm.yml`.
+
+### Railway (current, until cutover)
 
 Railway project `queueplay-jukebox`, two environments, each with its own app + Postgres:
 

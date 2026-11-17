@@ -1,0 +1,50 @@
+# Deploy to the Oracle VM on every push to main (replaces Railway auto-deploy).
+#
+# OFF until these repository secrets exist (Settings → Secrets and variables → Actions):
+#   VM_HOST     public IP or hostname of the VM
+#   VM_SSH_KEY  private key of a deploy key allowed in ~ubuntu/.ssh/authorized_keys
+name: Deploy to VM
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vm
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VM_HOST: ${{ secrets.VM_HOST }}
+      VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+    steps:
+      - name: Check configuration
+        id: cfg
+        run: |
+          if [ -z "$VM_HOST" ] || [ -z "$VM_SSH_KEY" ]; then
+            echo "VM secrets not set; skipping (expected until the VM cutover)."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Pull, build, restart
+        if: steps.cfg.outputs.enabled == 'true'
+        run: |
+          install -m 600 /dev/null key && printf '%s\n' "$VM_SSH_KEY" > key
+          ssh -i key -o StrictHostKeyChecking=accept-new ubuntu@"$VM_HOST" '
+            set -e
+            cd ~/apps/bar-jukebox
+            git fetch --quiet origin main && git reset --hard origin/main
+            docker compose -f deploy/compose.yml up -d --build app
+            docker image prune -f >/dev/null
+            for i in $(seq 1 20); do
+              docker exec queueplay wget -qO- http://127.0.0.1:3000/api/health && exit 0
+              sleep 3
+            done
+            echo "health check failed"; docker logs --tail 50 queueplay; exit 1
+          '
+          rm -f key
